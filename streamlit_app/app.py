@@ -1,4 +1,6 @@
-import json
+import copy
+import re
+
 import streamlit as st
 from api_client import API_URL, APIError, auth, get, post, put, request
 
@@ -52,6 +54,103 @@ def profile_dict_from_analysis(candidate):
     return candidate
 
 
+
+
+def _normalise_url(value: str) -> str:
+    value = (value or "").strip()
+    if value and value.startswith("www."):
+        return "https://" + value
+    return value
+
+
+def _md_linkify(text: str) -> str:
+    def repl(match):
+        url = match.group(0).rstrip(".,;)")
+        return f"[{url}]({url})"
+
+    return re.sub(r"https?://[^\s|]+", repl, text or "")
+
+
+def collect_link_evidence(candidate: dict) -> dict:
+    contact = candidate.get("contact") or {}
+    projects = candidate.get("projects") or []
+    answers = {}
+
+    st.subheader("Links & project proof")
+    st.caption(
+        "Only provide links you actually own or can show as evidence. "
+        "CVForge will preserve them and make them clickable in PDF/DOCX exports."
+    )
+
+    with st.expander("Professional links", expanded=True):
+        c1, c2, c3 = st.columns(3)
+        linkedin = c1.text_input(
+            "LinkedIn URL",
+            value=contact.get("linkedin", ""),
+            placeholder="https://linkedin.com/in/your-profile",
+            key="link_linkedin",
+        )
+        portfolio = c2.text_input(
+            "Portfolio URL",
+            value=contact.get("portfolio", ""),
+            placeholder="https://yourportfolio.com",
+            key="link_portfolio",
+        )
+        github = c3.text_input(
+            "GitHub URL",
+            value=contact.get("github", ""),
+            placeholder="https://github.com/username",
+            key="link_github",
+        )
+
+        if linkedin.strip():
+            answers["linkedin_url"] = _normalise_url(linkedin)
+        if portfolio.strip():
+            answers["portfolio_url"] = _normalise_url(portfolio)
+        if github.strip():
+            answers["github_url"] = _normalise_url(github)
+
+    with st.expander("Project links", expanded=True):
+        for idx, project in enumerate(projects):
+            c1, c2 = st.columns([1, 2])
+            name = c1.text_input(
+                f"Project {idx + 1} name",
+                value=project.get("name", "") or f"Project {idx + 1}",
+                key=f"project_name_{idx}",
+            )
+            url = c2.text_input(
+                "Project / demo / GitHub link",
+                value=project.get("url", ""),
+                placeholder="https://github.com/... or live demo URL",
+                key=f"project_url_{idx}",
+            )
+            if name.strip():
+                answers[f"project_name_{idx}"] = name.strip()
+            if url.strip():
+                answers[f"project_url_{idx}"] = _normalise_url(url)
+
+        st.markdown("**Additional projects**")
+        for idx in (1, 2):
+            c1, c2 = st.columns([1, 2])
+            name = c1.text_input(
+                f"Additional project {idx} name",
+                key=f"additional_project_{idx}_name",
+                placeholder="Project name",
+            )
+            url = c2.text_input(
+                f"Additional project {idx} link",
+                key=f"additional_project_{idx}_url",
+                placeholder="https://...",
+            )
+            if name.strip():
+                answers[f"additional_project_{idx}_name"] = name.strip()
+            if url.strip():
+                answers[f"additional_project_{idx}_url"] = _normalise_url(url)
+
+    st.session_state.link_answers = answers
+    return answers
+
+
 def new_application():
     st.header('New application')
     st.write('Upload your existing CV and paste the target job description. CVForge analyzes both before generation.')
@@ -84,12 +183,16 @@ def new_application():
         st.caption('Answer only what is true. These answers become additional evidence for generation.')
         for q in questions:
             answers[q['key']]=st.text_area(q['question'],help=q.get('reason',''),key='q_'+q['key'])
+
+    link_answers = collect_link_evidence(candidate)
+    answers.update(link_answers)
+
     if st.button('Create application and generate CV',type='primary'):
         try:
             payload={'job':job,'candidate':candidate}
             created=post('/api/v1/jobs/applications',st.session_state.token,json=payload)
             st.session_state.application=created
-            with st.spinner('Grok is tailoring your resume and ATS validation is running...'):
+            with st.spinner('Groq is tailoring your resume, preserving evidence, and running ATS validation...'):
                 result=post(f"/api/v1/jobs/applications/{created['id']}/generate",st.session_state.token,json=answers)
             st.session_state.resume=result
             st.success('Resume generated successfully.')
@@ -106,7 +209,8 @@ def render_resume(result):
     m2.metric('Keyword coverage',f"{ats.get('keyword_coverage',0):.1f}%")
     m3.metric('Section score',f"{ats.get('section_score',0):.1f}%")
     st.subheader(resume.get('name','Resume'))
-    st.caption(resume.get('contact_line',''))
+    if resume.get('contact_line'):
+        st.markdown(_md_linkify(resume.get('contact_line','')))
     st.markdown(f"**{resume.get('headline','')}**")
     if resume.get('summary'): st.write(resume['summary'])
     for title,key in [('Skills','skills'),('Experience','experience'),('Projects','projects'),('Education','education'),('Certifications','certifications')]:
@@ -121,17 +225,32 @@ def render_resume(result):
                 for b in x.get('bullets',[]): st.markdown(f'- {b}')
         elif key=='projects':
             for x in values:
-                st.markdown(f"**{x.get('name','')}**")
+                st.markdown(f"**_{x.get('name','')}_**")
+                if x.get('url'):
+                    st.markdown(f"[Project link]({_normalise_url(x['url'])})")
                 if x.get('technologies'): st.caption(', '.join(x['technologies']))
                 for b in x.get('bullets',[]): st.markdown(f'- {b}')
         elif key=='education':
             for x in values: st.markdown(f"**{x.get('degree','')} {x.get('field','')}** — {x.get('institution','')} {x.get('dates','')}")
     if ats.get('warnings'): st.warning('\n'.join(ats['warnings']))
     st.subheader('Edit resume')
-    edited=resume.copy()
+    edited=copy.deepcopy(resume)
+
+    edited['contact_line']=st.text_input('Contact line',value=resume.get('contact_line',''))
+
     edited['headline']=st.text_input('Headline',value=resume.get('headline',''))
     edited['summary']=st.text_area('Summary',value=resume.get('summary',''),height=150)
     edited['skills']=[x.strip() for x in st.text_input('Skills (comma separated)',value=', '.join(resume.get('skills',[]))).split(',') if x.strip()]
+
+    if edited.get('projects'):
+        st.caption('Project links')
+        for idx,project in enumerate(edited['projects']):
+            edited['projects'][idx]['url']=st.text_input(
+                f"{project.get('name','Project')} link",
+                value=project.get('url',''),
+                key=f"edit_project_url_{result.get('resume_id')}_{idx}"
+            )
+
     if st.button('Save new resume revision'):
         rid=result.get('resume_id')
         if rid:
