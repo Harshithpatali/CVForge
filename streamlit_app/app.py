@@ -113,41 +113,59 @@ def collect_link_evidence(candidate: dict) -> dict:
             answers["github_url"] = _normalise_url(github)
 
     with st.expander("Project links", expanded=True):
+        st.caption(
+            "For each project, provide a project name plus up to two links. "
+            "Typical pair: GitHub + Live Demo."
+        )
+
         for idx, project in enumerate(projects):
-            c1, c2 = st.columns([1, 2])
-            name = c1.text_input(
+            name = st.text_input(
                 f"Project {idx + 1} name",
                 value=project.get("name", "") or f"Project {idx + 1}",
                 key=f"project_name_{idx}",
             )
-            url = c2.text_input(
-                "Project / demo / GitHub link",
-                value=project.get("url", ""),
-                placeholder="https://github.com/... or live demo URL",
-                key=f"project_url_{idx}",
+            c1, c2 = st.columns(2)
+            github_url = c1.text_input(
+                "GitHub",
+                placeholder="https://github.com/...",
+                key=f"project_github_url_{idx}",
+            )
+            demo_url = c2.text_input(
+                "Live Demo / Portfolio",
+                placeholder="https://...",
+                key=f"project_demo_url_{idx}",
             )
             if name.strip():
                 answers[f"project_name_{idx}"] = name.strip()
-            if url.strip():
-                answers[f"project_url_{idx}"] = _normalise_url(url)
+            if github_url.strip():
+                answers[f"project_github_url_{idx}"] = _normalise_url(github_url)
+            if demo_url.strip():
+                answers[f"project_demo_url_{idx}"] = _normalise_url(demo_url)
 
         st.markdown("**Additional projects**")
         for idx in (1, 2):
-            c1, c2 = st.columns([1, 2])
-            name = c1.text_input(
+            name = st.text_input(
                 f"Additional project {idx} name",
                 key=f"additional_project_{idx}_name",
                 placeholder="Project name",
             )
-            url = c2.text_input(
-                f"Additional project {idx} link",
-                key=f"additional_project_{idx}_url",
+            c1, c2 = st.columns(2)
+            github_url = c1.text_input(
+                "GitHub",
+                placeholder="https://github.com/...",
+                key=f"additional_project_{idx}_github_url",
+            )
+            demo_url = c2.text_input(
+                "Live Demo / Portfolio",
                 placeholder="https://...",
+                key=f"additional_project_{idx}_demo_url",
             )
             if name.strip():
                 answers[f"additional_project_{idx}_name"] = name.strip()
-            if url.strip():
-                answers[f"additional_project_{idx}_url"] = _normalise_url(url)
+            if github_url.strip():
+                answers[f"additional_project_{idx}_github_url"] = _normalise_url(github_url)
+            if demo_url.strip():
+                answers[f"additional_project_{idx}_demo_url"] = _normalise_url(demo_url)
 
     st.session_state.link_answers = answers
     return answers
@@ -214,13 +232,33 @@ def render_resume(result):
     st.subheader(resume.get('name','Resume'))
     if resume.get('contact_line'):
         st.markdown(_md_linkify(resume.get('contact_line','')))
-    st.markdown(f"**{resume.get('headline','')}**")
+
+    professional_links = resume.get('professional_links') or []
+    if professional_links:
+        st.markdown(
+            " | ".join(
+                f"[{x.get('label', 'Link')}]({_normalise_url(x.get('url', ''))})"
+                for x in professional_links
+                if x.get('url')
+            )
+        )
+
+    if resume.get('headline'):
+        st.markdown(f"**{resume.get('headline','')}**")
     if resume.get('summary'): st.write(resume['summary'])
     for title,key in [('Skills','skills'),('Experience','experience'),('Projects','projects'),('Education','education'),('Certifications','certifications')]:
         values=resume.get(key) or []
         if not values: continue
         st.subheader(title)
-        if key in {'skills','certifications'}: st.write(', '.join(values))
+        if key == 'skills':
+            groups = resume.get('skill_groups') or {}
+            if groups:
+                for group, group_values in groups.items():
+                    if group_values:
+                        st.markdown(f"**{group}:** " + ", ".join(group_values))
+            else:
+                st.write(', '.join(values))
+        elif key=='certifications': st.write(', '.join(values))
         elif key=='experience':
             for x in values:
                 st.markdown(f"**{x.get('title','')} — {x.get('company','')}**  ")
