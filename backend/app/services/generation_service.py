@@ -11,7 +11,7 @@ from app.models.entities import (
     ResumeArtifact,
 )
 from app.schemas.cv import CandidateProfile, JobProfile, Project
-from app.schemas.resume import GeneratedResume
+from app.schemas.resume import GeneratedResume, ResumeProject
 from app.services.ats_validator import validate
 from app.services.llm import generate_resume
 from app.services.prompt_engine import build_generation_prompt, select_template
@@ -45,7 +45,9 @@ def _prompt_version(db: Session, template, prompt_text: str) -> PromptVersion:
 
 def _normalise_url(value: str | None) -> str:
     value = (value or "").strip()
-    if value.startswith("www."):
+    if not value:
+        return ""
+    if not value.startswith(("http://", "https://")):
         return f"https://{value}"
     return value
 
@@ -120,6 +122,26 @@ def _restore_project_links(resume: GeneratedResume, candidate: CandidateProfile)
             project.url = exact
         elif idx < len(candidate.projects) and candidate.projects[idx].url:
             project.url = candidate.projects[idx].url
+
+    generated_keys = {
+        _project_key(project.name)
+        for project in resume.projects
+        if project.name
+    }
+
+    for project in candidate.projects:
+        if (
+            project.name
+            and project.url
+            and _project_key(project.name) not in generated_keys
+        ):
+            resume.projects.append(
+                ResumeProject(
+                    name=project.name,
+                    url=project.url,
+                )
+            )
+            generated_keys.add(_project_key(project.name))
 
 
 def _record_failure(
