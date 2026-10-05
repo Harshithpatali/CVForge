@@ -7,7 +7,7 @@ from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Inches, Pt
+from docx.shared import Inches, Pt, RGBColor
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate
@@ -142,6 +142,7 @@ def render_pdf(resume: dict) -> bytes:
         fontName="Helvetica-Bold",
         fontSize=18,
         leading=20,
+        textColor="#16478E",
         alignment=1,
         spaceAfter=3,
     )
@@ -423,7 +424,7 @@ def render_docx(resume: dict) -> bytes:
         )
 
     if resume.get("experience"):
-        heading("Experience")
+        heading("Professional Experience")
         for item in resume["experience"]:
             p = doc.add_paragraph()
             r = p.add_run(
@@ -454,7 +455,7 @@ def render_docx(resume: dict) -> bytes:
                 _add_rich_docx_paragraph(p, bullet)
 
     if resume.get("projects"):
-        heading("Projects")
+        heading("Selected Projects")
         for item in resume["projects"]:
             p = doc.add_paragraph()
             r = p.add_run(_normalise_text(item.get("name", "")))
