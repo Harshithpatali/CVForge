@@ -1,0 +1,17 @@
+templates:
+  classic_ats:
+    label: Classic ATS
+    roles: [general, data_analytics, product, marketing]
+    description: Single-column conservative business resume with standard headings.
+  technical_ats:
+    label: Technical ATS
+    roles: [data_science, machine_learning, data_engineering, software]
+    description: Single-column technical resume prioritizing skills, projects and measurable engineering evidence.
+  finance_ats:
+    label: Finance ATS
+    roles: [finance]
+    description: Single-column finance resume emphasizing analytical experience, risk/domain evidence and education.
+  academic_ats:
+    label: Academic/Research ATS
+    roles: [general]
+    description: Single-column research-friendly resume for research-heavy applications.
