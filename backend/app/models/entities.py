@@ -69,6 +69,7 @@ class ResumeArtifact(Base):
     resume_json: Mapped[dict] = mapped_column(JSON)
     ats_json: Mapped[dict] = mapped_column(JSON)
     prompt_version_id: Mapped[int | None] = mapped_column(ForeignKey('prompt_versions.id'))
+    prompt_key: Mapped[str] = mapped_column(String(255), default='classic_ats')
     template_key: Mapped[str] = mapped_column(String(120), default='classic_ats')
     docx_path: Mapped[str | None] = mapped_column(Text)
     pdf_path: Mapped[str | None] = mapped_column(Text)
