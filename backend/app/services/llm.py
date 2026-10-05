@@ -142,7 +142,7 @@ def generate_resume(prompt: str) -> dict:
                 "content": (
                     "Return the complete CVForge resume schema. Every required field "
                     "must be present, including empty arrays when there is no evidence. "
-                    "Never invent facts or URLs.",
+                    "Never invent facts or URLs."
                 ),
             },
             {"role": "user", "content": prompt},
