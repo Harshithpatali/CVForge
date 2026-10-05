@@ -1,6 +1,6 @@
 from datetime import datetime
 from sqlalchemy.orm import Session
-from app.models.entities import Application, CandidateProfileRecord, GenerationJob, PromptVersion, ResumeArtifact
+from app.models.entities import Application, CandidateProfileRecord, GenerationJob, PromptVersion, ResumeArtifact, GenerationEvent
 from app.schemas.cv import CandidateProfile, JobProfile
 from app.schemas.resume import GeneratedResume
 from app.services.ats_validator import validate
