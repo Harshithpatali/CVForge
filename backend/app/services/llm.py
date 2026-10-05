@@ -5,12 +5,12 @@ from app.core.config import settings
 
 def _extract_json(text: str) -> dict:
     text = text.strip()
-    text = re.sub(r'^```(?:json)?\\s*', '', text)
-    text = re.sub(r'\\s*```$', '', text)
+    text = re.sub(r'^```(?:json)?\s*', '', text)
+    text = re.sub(r'\s*```$', '', text)
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        match = re.search(r'\\{.*\\}', text, re.S)
+        match = re.search(r'\{.*\}', text, re.S)
         if not match:
             raise ValueError('Grok did not return valid JSON.')
         return json.loads(match.group(0))
