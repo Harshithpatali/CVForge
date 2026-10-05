@@ -18,12 +18,12 @@ def _pdf_text(value) -> str:
     """Escape resume text before passing it to ReportLab's mini-HTML parser."""
     text = str(value or "")
     text = (
-        text.replace("\\x00", "")
-        .replace("\\r", "")
-        .replace("\\u2028", " ")
-        .replace("\\u2029", " ")
+        text.replace("\x00", "")
+        .replace("\r", "")
+        .replace("\u2028", " ")
+        .replace("\u2029", " ")
     )
-    return escape(text).replace("\\n", "<br/>")
+    return escape(text).replace("\n", "<br/>")
 
 
 def render_docx(resume: dict) -> bytes:
