@@ -209,6 +209,22 @@ def render_pdf(resume: dict) -> bytes:
         Paragraph(_pdf_rich_text(resume.get("contact_line", "")), contact),
     ]
 
+    professional_links = resume.get("professional_links") or []
+    if professional_links:
+        link_parts = []
+        for link in professional_links:
+            label = _normalise_text(link.get("label", "Link"))
+            url = _url(_normalise_text(link.get("url", "")))
+            if url:
+                link_parts.append(
+                    f'<link href="{escape(url, quote=True)}" color="#000000">'
+                    f'<u>{escape(label)}</u></link>'
+                )
+        if link_parts:
+            story.append(
+                Paragraph(" | ".join(link_parts), contact)
+            )
+
     if resume.get("headline"):
         story.append(
             Paragraph(escape(_normalise_text(resume["headline"])), headline)
@@ -218,8 +234,20 @@ def render_pdf(resume: dict) -> bytes:
         _section(story, "Professional Summary", section)
         story.append(Paragraph(_pdf_rich_text(resume["summary"]), body))
 
-    if resume.get("skills"):
-        _section(story, "Skills", section)
+    if resume.get("skill_groups"):
+        _section(story, "Technical Skills", section)
+        for group, values in resume["skill_groups"].items():
+            if not values:
+                continue
+            text = ", ".join(_normalise_text(x) for x in values)
+            story.append(
+                Paragraph(
+                    f"<b>{escape(_normalise_text(group))}:</b> {_pdf_rich_text(text)}",
+                    body,
+                )
+            )
+    elif resume.get("skills"):
+        _section(story, "Technical Skills", section)
         story.append(
             Paragraph(
                 _pdf_rich_text(
@@ -258,11 +286,21 @@ def render_pdf(resume: dict) -> bytes:
             url = _normalise_text(item.get("url", ""))
 
             project_heading = f"<b><i>{escape(name)}</i></b>"
-            if url:
+            links = item.get("links") or []
+            if links:
+                for link in links:
+                    label = _normalise_text(link.get("label", "Project"))
+                    clean_url = _url(_normalise_text(link.get("url", "")))
+                    if clean_url:
+                        project_heading += (
+                            f' | <link href="{escape(clean_url, quote=True)}" '
+                            f'color="#000000"><u>{escape(label)}</u></link>'
+                        )
+            elif url:
                 clean_url = _url(url)
                 project_heading += (
                     f' | <link href="{escape(clean_url, quote=True)}" '
-                    f'color="#111827"><u>{escape(clean_url)}</u></link>'
+                    f'color="#000000"><u>Project</u></link>'
                 )
             story.append(Paragraph(project_heading, entry))
 
@@ -337,6 +375,18 @@ def render_docx(resume: dict) -> bytes:
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         _add_rich_docx_paragraph(p, resume["contact_line"])
 
+    professional_links = resume.get("professional_links") or []
+    if professional_links:
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        for index, link in enumerate(professional_links):
+            if index:
+                p.add_run(" | ")
+            label = _normalise_text(link.get("label", "Link"))
+            url = _url(_normalise_text(link.get("url", "")))
+            if url:
+                _add_hyperlink(p, label, url)
+
     if resume.get("headline"):
         p = doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -356,8 +406,17 @@ def render_docx(resume: dict) -> bytes:
         heading("Professional Summary")
         doc.add_paragraph(_normalise_text(resume["summary"]))
 
-    if resume.get("skills"):
-        heading("Skills")
+    if resume.get("skill_groups"):
+        heading("Technical Skills")
+        for group, values in resume["skill_groups"].items():
+            if not values:
+                continue
+            p = doc.add_paragraph()
+            r = p.add_run(f"{_normalise_text(group)}: ")
+            r.bold = True
+            p.add_run(", ".join(_normalise_text(x) for x in values))
+    elif resume.get("skills"):
+        heading("Technical Skills")
         doc.add_paragraph(
             ", ".join(_normalise_text(x) for x in resume["skills"])
         )
@@ -401,11 +460,20 @@ def render_docx(resume: dict) -> bytes:
             r.bold = True
             r.italic = True
 
-            url = _normalise_text(item.get("url", ""))
-            if url:
-                p.add_run(" | ")
-                clean_url = _url(url)
-                _add_hyperlink(p, clean_url, clean_url)
+            links = item.get("links") or []
+            if links:
+                for link in links:
+                    url = _url(_normalise_text(link.get("url", "")))
+                    label = _normalise_text(link.get("label", "Project"))
+                    if url:
+                        p.add_run(" | ")
+                        _add_hyperlink(p, label, url)
+            else:
+                url = _normalise_text(item.get("url", ""))
+                if url:
+                    p.add_run(" | ")
+                    clean_url = _url(url)
+                    _add_hyperlink(p, "Project", clean_url)
 
             technologies = item.get("technologies") or []
             if technologies:
