@@ -149,7 +149,6 @@ def generate_resume(prompt: str) -> dict:
         ],
         temperature=0.2,
         max_completion_tokens=5000,
-        reasoning_format="hidden",
         response_format={
             "type": "json_schema",
             "json_schema": {
