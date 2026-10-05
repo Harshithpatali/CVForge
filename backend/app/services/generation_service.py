@@ -107,11 +107,21 @@ def _project_key(name: str) -> str:
 
 
 def _restore_project_links(resume: GeneratedResume, candidate: CandidateProfile) -> None:
+    allowed_urls = {
+        project.url.strip()
+        for project in candidate.projects
+        if project.url and project.url.strip()
+    }
     candidate_by_name = {
         _project_key(project.name): project.url
         for project in candidate.projects
         if project.url
     }
+
+    # Strip any URL the model may have invented.
+    for project in resume.projects:
+        if project.url and project.url.strip() not in allowed_urls:
+            project.url = ""
 
     for idx, project in enumerate(resume.projects):
         if project.url:
