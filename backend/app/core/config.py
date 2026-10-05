@@ -3,9 +3,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
     database_url: str
-    xai_api_key: str = ''
-    xai_model: str = 'grok-4.7'
-    xai_base_url: str = 'https://api.x.ai/v1'
+    groq_api_key: str = ''
+    groq_model: str = 'openai/gpt-oss-120b'
+    groq_base_url: str = 'https://api.groq.com/openai/v1'
     jwt_secret: str = 'change-me-in-production'
     jwt_expire_minutes: int = 1440
     cors_origins: str = '*'
