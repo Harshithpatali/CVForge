@@ -21,11 +21,11 @@ HARD RULES:
 4. Do not add a skill merely because it appears in the job description.
 5. If evidence for a required skill is absent, omit it from the resume.
 6. Prefer quantified achievements only when the source contains a real number.
-7. Preserve candidate-provided LinkedIn, portfolio, GitHub, and project URLs exactly; never replace them with fabricated links.
-8. If a project URL is provided, put it in that project's "url" field.
-9. The contact line should contain available email/phone/location plus the provided LinkedIn, Portfolio, and GitHub URLs in a compact ATS-readable format.
-10. Never output a placeholder such as "linkedin.com/yourname", "github.com/username", "example.com", or "project-link".
-11. Keep the resume concise and ATS-readable.
+7. Preserve candidate-provided LinkedIn, portfolio, GitHub, and project URLs exactly.
+8. Project links must use the provided label, such as GitHub or Live Demo.
+9. Never output a placeholder link or invent a URL.
+10. Keep the resume concise, one-column, ATS-readable, and visually close to a professional LaTeX CV.
+11. Use categorized technical skills where the evidence supports categories such as Languages, Data & ML, Statistics, Analytics, Databases & Tools, Deployment, and Visualization.
 12. Return ONLY valid JSON matching the requested schema.
 """
 
@@ -107,6 +107,18 @@ def build_generation_prompt(
         "headline": "string",
         "summary": "string",
         "skills": ["string"],
+        "skill_groups": {
+            "Languages": ["string"],
+            "Data & ML": ["string"],
+            "Statistics": ["string"],
+            "Analytics": ["string"],
+            "Databases & Tools": ["string"],
+            "Deployment": ["string"],
+            "Visualization": ["string"],
+        },
+        "professional_links": [
+            {"label": "LinkedIn", "url": "https://..."}
+        ],
         "experience": [
             {
                 "company": "string",
@@ -122,6 +134,10 @@ def build_generation_prompt(
                 "bullets": ["string"],
                 "technologies": ["string"],
                 "url": "string",
+                "links": [
+                    {"label": "GitHub", "url": "https://..."},
+                    {"label": "Live Demo", "url": "https://..."}
+                ],
             }
         ],
         "education": [
@@ -150,8 +166,12 @@ OUTPUT JSON SCHEMA:
 {json.dumps(schema, ensure_ascii=False)}
 
 Create the strongest truthful ATS-friendly resume for this exact job.
-Use a compact modern one-column structure suitable for a LaTeX-style professional CV.
-Prioritize the strongest evidence, concise bullets, measurable outcomes, and relevant projects.
-Keep provided URLs intact and include them; never invent missing links.
-Reorder and rewrite evidence to maximize relevance, but never fabricate evidence.
+Use the visual hierarchy of the supplied LaTeX reference:
+name and target headline centered, compact contact row, professional links row,
+then blue-accent section headings with horizontal rules.
+Keep experience and projects concise with strong bullets.
+For projects, use the exact project names supplied by the candidate where possible
+and include GitHub / Live Demo links when provided.
+For skills, group evidence into useful categories rather than one giant comma-separated list.
+Never invent links, metrics, dates, employers, or credentials.
 """
