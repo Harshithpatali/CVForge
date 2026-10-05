@@ -107,19 +107,10 @@ def _contact_line_from_evidence(candidate: CandidateProfile, fallback: str) -> s
     contact = candidate.contact
     parts: list[str] = []
 
-    for value in (contact.email, contact.phone, contact.location):
+    for value in (contact.location, contact.phone, contact.email):
         value = (value or "").strip()
         if value and value not in parts:
             parts.append(value)
-
-    for label, value in (
-        ("LinkedIn", contact.linkedin),
-        ("Portfolio", contact.portfolio),
-        ("GitHub", contact.github),
-    ):
-        value = (value or "").strip()
-        if value:
-            parts.append(f"{label}: {value}")
 
     return " | ".join(parts) if parts else fallback
 
