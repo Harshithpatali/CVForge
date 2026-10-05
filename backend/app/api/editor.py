@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.core.auth import current_user
-from app.models.entities import Application, ResumeArtifact
+from app.models.entities import Application, CandidateProfileRecord, ResumeArtifact
 from app.schemas.resume import GeneratedResume
 from app.schemas.cv import CandidateProfile, JobProfile
 from app.services.ats_validator import validate
@@ -23,7 +23,11 @@ def update_resume(resume_id:int,x:ResumeUpdate,u=Depends(current_user),db:Sessio
     if not r or not a or a.user_id!=u.id: raise HTTPException(404,'Resume not found')
     resume=GeneratedResume.model_validate(x.resume)
     job=JobProfile.model_validate(a.job_json)
-    candidate=CandidateProfile.model_validate(a.candidate_json or {})
+    candidate_data=a.candidate_json
+    if not candidate_data and a.candidate_profile_id:
+        profile=db.query(CandidateProfileRecord).filter_by(id=a.candidate_profile_id,user_id=u.id).first()
+        candidate_data=profile.profile_json if profile else {}
+    candidate=CandidateProfile.model_validate(candidate_data or {})
     ats=validate(resume,job,candidate)
     new=ResumeArtifact(application_id=r.application_id,version=r.version+1,resume_json=resume.model_dump(),ats_json=ats,prompt_version_id=r.prompt_version_id,template_key=r.template_key)
     db.add(new);db.commit();db.refresh(new)
