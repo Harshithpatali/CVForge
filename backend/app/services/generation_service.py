@@ -32,7 +32,7 @@ def generate_for_application(db: Session, application: Application, answers: dic
     db.flush()
     template = select_template(job.role_family, job.seniority, job.domain)
     prompt = build_generation_prompt(job.model_dump(), candidate.model_dump(exclude={'raw_text'}), answers, template)
-    pv = _prompt_version(db, template, prompt)
+    pv = _prompt_version(db, template, template.instructions)
     try:
         raw = generate_resume(prompt)
         resume = GeneratedResume.model_validate(raw)
