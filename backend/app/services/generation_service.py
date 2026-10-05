@@ -10,8 +10,8 @@ from app.models.entities import (
     PromptVersion,
     ResumeArtifact,
 )
-from app.schemas.cv import CandidateProfile, JobProfile, Project
-from app.schemas.resume import GeneratedResume, ResumeProject
+from app.schemas.cv import CandidateProfile, JobProfile, Project, ProjectLink
+from app.schemas.resume import GeneratedResume, ResumeLink, ResumeProject
 from app.services.ats_validator import validate
 from app.services.llm import generate_resume
 from app.services.prompt_engine import build_generation_prompt, select_template
@@ -66,20 +66,42 @@ def _apply_link_evidence(candidate: CandidateProfile, answers: dict[str, str]) -
 
     for idx, project in enumerate(candidate.projects):
         name = (answers.get(f"project_name_{idx}") or "").strip()
-        url = _normalise_url(answers.get(f"project_url_{idx}"))
+        github_url = _normalise_url(answers.get(f"project_github_url_{idx}"))
+        demo_url = _normalise_url(answers.get(f"project_demo_url_{idx}"))
+        legacy_url = _normalise_url(answers.get(f"project_url_{idx}"))
 
         if name:
             project.name = name
-        if url:
-            project.url = url
+
+        links = []
+        if github_url:
+            links.append(ProjectLink(label="GitHub", url=github_url))
+        if demo_url:
+            links.append(ProjectLink(label="Live Demo", url=demo_url))
+        if links:
+            project.links = links
+        elif legacy_url:
+            project.url = legacy_url
+            project.links = [ProjectLink(label="Project", url=legacy_url)]
 
     for idx in (1, 2):
         name = (answers.get(f"additional_project_{idx}_name") or "").strip()
-        url = _normalise_url(answers.get(f"additional_project_{idx}_url"))
+        github_url = _normalise_url(answers.get(f"additional_project_{idx}_github_url"))
+        demo_url = _normalise_url(answers.get(f"additional_project_{idx}_demo_url"))
 
-        if name and url:
-            candidate.projects.append(Project(name=name, url=url))
+        links = []
+        if github_url:
+            links.append(ProjectLink(label="GitHub", url=github_url))
+        if demo_url:
+            links.append(ProjectLink(label="Live Demo", url=demo_url))
 
+        if name and links:
+            candidate.projects.append(
+                Project(
+                    name=name,
+                    links=links,
+                )
+            )
 
 def _contact_line_from_evidence(candidate: CandidateProfile, fallback: str) -> str:
     contact = candidate.contact
@@ -108,51 +130,67 @@ def _project_key(name: str) -> str:
 
 def _restore_project_links(resume: GeneratedResume, candidate: CandidateProfile) -> None:
     allowed_urls = {
+        link.url.strip()
+        for project in candidate.projects
+        for link in project.links
+        if link.url and link.url.strip()
+    }
+    allowed_urls.update(
         project.url.strip()
         for project in candidate.projects
         if project.url and project.url.strip()
-    }
+    )
+
     candidate_by_name = {
-        _project_key(project.name): project.url
+        _project_key(project.name): project
         for project in candidate.projects
-        if project.url
+        if project.links or project.url
     }
 
-    # Strip any URL the model may have invented.
-    for project in resume.projects:
-        if project.url and project.url.strip() not in allowed_urls:
-            project.url = ""
+    generated_keys = set()
 
-    for idx, project in enumerate(resume.projects):
+    for project in resume.projects:
+        project_links = []
+        for link in project.links:
+            url = _normalise_url(link.url)
+            if url in allowed_urls:
+                project_links.append(
+                    ResumeLink(label=link.label or "Project", url=url)
+                )
         if project.url:
-            continue
+            url = _normalise_url(project.url)
+            if url in allowed_urls and not any(x.url == url for x in project_links):
+                project_links.append(ResumeLink(label="Project", url=url))
 
         exact = candidate_by_name.get(_project_key(project.name))
         if exact:
-            project.url = exact
-        elif idx < len(candidate.projects) and candidate.projects[idx].url:
-            project.url = candidate.projects[idx].url
+            for link in exact.links:
+                if not any(x.url == link.url for x in project_links):
+                    project_links.append(
+                        ResumeLink(label=link.label, url=link.url)
+                    )
+            if exact.url and not any(x.url == exact.url for x in project_links):
+                project_links.append(
+                    ResumeLink(label="Project", url=exact.url)
+                )
 
-    generated_keys = {
-        _project_key(project.name)
-        for project in resume.projects
-        if project.name
-    }
+        project.links = project_links
+        project.url = project_links[0].url if project_links else ""
+        generated_keys.add(_project_key(project.name))
 
     for project in candidate.projects:
-        if (
-            project.name
-            and project.url
-            and _project_key(project.name) not in generated_keys
-        ):
+        if project.name and project.links and _project_key(project.name) not in generated_keys:
             resume.projects.append(
                 ResumeProject(
                     name=project.name,
-                    url=project.url,
+                    url=project.links[0].url,
+                    links=[
+                        ResumeLink(label=link.label, url=link.url)
+                        for link in project.links
+                    ],
                 )
             )
             generated_keys.add(_project_key(project.name))
-
 
 def _record_failure(
     db: Session,
@@ -279,6 +317,12 @@ def generate_for_application(
             resume.contact_line,
         )
         _restore_project_links(resume, candidate)
+        resume.professional_links = [
+            ResumeLink(label="LinkedIn", url=candidate.contact.linkedin),
+            ResumeLink(label="GitHub", url=candidate.contact.github),
+            ResumeLink(label="Portfolio", url=candidate.contact.portfolio),
+        ]
+        resume.professional_links = [x for x in resume.professional_links if x.url]
 
         ats = validate(resume, job, candidate)
 
