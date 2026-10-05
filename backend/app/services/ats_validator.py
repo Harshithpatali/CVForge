@@ -45,6 +45,9 @@ def validate(resume: GeneratedResume, job: JobProfile, candidate: CandidateProfi
         expected_links.append(("GitHub", candidate.contact.github))
 
     for project in candidate.projects:
+        for link in project.links:
+            if link.url:
+                expected_links.append((f"{project.name or 'Project'} - {link.label}", link.url))
         if project.url:
             expected_links.append((project.name or "Project", project.url))
 
