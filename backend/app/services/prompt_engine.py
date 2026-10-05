@@ -26,7 +26,8 @@ HARD RULES:
 9. Never output a placeholder link or invent a URL.
 10. Keep the resume concise, one-column, ATS-readable, and visually close to a professional LaTeX CV.
 11. Use categorized technical skills where the evidence supports categories such as Languages, Data & ML, Statistics, Analytics, Databases & Tools, Deployment, and Visualization.
-12. Return ONLY valid JSON matching the requested schema.
+12. The contact line must contain only location, phone, and email; professional links belong in the separate professional_links field.
+13. Return ONLY valid JSON matching the requested schema.
 """
 
 
@@ -88,7 +89,7 @@ def select_template(role_family: str, seniority: str, domain: str) -> PromptTemp
         role,
         senior,
         dom,
-        1,
+        2,
         instructions,
     )
 
