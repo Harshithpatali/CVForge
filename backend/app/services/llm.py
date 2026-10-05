@@ -22,9 +22,25 @@ RESUME_JSON_SCHEMA = {
         "skills": {"type": "array", "items": {"type": "string"}},
         "skill_groups": {
             "type": "object",
-            "additionalProperties": {
-                "type": "array", "items": {"type": "string"}
+            "additionalProperties": False,
+            "properties": {
+                "Languages": {"type": "array", "items": {"type": "string"}},
+                "Data & ML": {"type": "array", "items": {"type": "string"}},
+                "Statistics": {"type": "array", "items": {"type": "string"}},
+                "Analytics": {"type": "array", "items": {"type": "string"}},
+                "Databases & Tools": {"type": "array", "items": {"type": "string"}},
+                "Deployment": {"type": "array", "items": {"type": "string"}},
+                "Visualization": {"type": "array", "items": {"type": "string"}},
             },
+            "required": [
+                "Languages",
+                "Data & ML",
+                "Statistics",
+                "Analytics",
+                "Databases & Tools",
+                "Deployment",
+                "Visualization",
+            ],
         },
         "professional_links": {
             "type": "array",
