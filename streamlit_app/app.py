@@ -58,7 +58,9 @@ def profile_dict_from_analysis(candidate):
 
 def _normalise_url(value: str) -> str:
     value = (value or "").strip()
-    if value and value.startswith("www."):
+    if not value:
+        return ""
+    if not value.startswith(("http://", "https://")):
         return "https://" + value
     return value
 
@@ -204,10 +206,11 @@ def new_application():
 def render_resume(result):
     resume=result.get('resume',{}); ats=result.get('ats',{})
     st.divider(); st.header('Resume result')
-    m1,m2,m3=st.columns(3)
+    m1,m2,m3,m4=st.columns(4)
     m1.metric('ATS score',f"{ats.get('score',0):.1f}")
     m2.metric('Keyword coverage',f"{ats.get('keyword_coverage',0):.1f}%")
     m3.metric('Section score',f"{ats.get('section_score',0):.1f}%")
+    m4.metric('Link coverage',f"{ats.get('link_coverage',100):.1f}%")
     st.subheader(resume.get('name','Resume'))
     if resume.get('contact_line'):
         st.markdown(_md_linkify(resume.get('contact_line','')))
