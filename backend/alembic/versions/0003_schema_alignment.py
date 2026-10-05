@@ -1,15 +1,15 @@
 """Align the production database with the current ORM models.
 
-Revision ID: 0003_schema_alignment
-Revises: 0002_saas_product
+Revision ID: 0004_schema_alignment
+Revises: 0003_streamlit_candidate
 """
 
 from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0003_schema_alignment"
-down_revision = "0002_saas_product"
+revision = "0004_schema_alignment"
+down_revision = "0003_streamlit_candidate"
 branch_labels = None
 depends_on = None
 
@@ -21,16 +21,8 @@ def _column_names(table_name: str) -> set[str]:
 
 
 def upgrade():
-    # Some deployments may already contain candidate_json from an earlier
-    # schema revision. Make this migration safe for both cases.
-    if "candidate_json" not in _column_names("applications"):
-        op.add_column(
-            "applications",
-            sa.Column("candidate_json", sa.JSON(), nullable=True),
-        )
-
-    # The current ResumeArtifact ORM includes updated_at, but 0001/0002 did
-    # not create it. Add it in a backfillable form for existing rows.
+    # 0003_streamlit_candidate already creates applications.candidate_json.
+    # This migration only aligns resume_artifacts with the current ORM.
     if "updated_at" not in _column_names("resume_artifacts"):
         op.add_column(
             "resume_artifacts",
@@ -56,6 +48,3 @@ def upgrade():
 def downgrade():
     if "updated_at" in _column_names("resume_artifacts"):
         op.drop_column("resume_artifacts", "updated_at")
-
-    if "candidate_json" in _column_names("applications"):
-        op.drop_column("applications", "candidate_json")
