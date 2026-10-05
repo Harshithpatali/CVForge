@@ -26,12 +26,18 @@ class Education(BaseModel):
     start_date: str = ""
     end_date: str = ""
 
+class ProjectLink(BaseModel):
+    label: str
+    url: str
+
+
 class Project(BaseModel):
     name: str = ""
     description: str = ""
     technologies: list[str] = Field(default_factory=list)
     bullets: list[str] = Field(default_factory=list)
     url: str = ""
+    links: list[ProjectLink] = Field(default_factory=list)
 
 class CandidateProfile(BaseModel):
     model_config = ConfigDict(extra="ignore")
