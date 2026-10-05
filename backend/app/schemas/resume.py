@@ -37,7 +37,7 @@ class GeneratedResume(BaseModel):
     skills: list[str]
     skill_groups: dict[str, list[str]] = Field(default_factory=dict)
     professional_links: list[ResumeLink] = Field(default_factory=list)
-    experience: list[ResumeExperience]
-    projects: list[ResumeProject]
-    education: list[ResumeEducation]
+    experience: list[ResumeExperience] = Field(default_factory=list)
+    projects: list[ResumeProject] = Field(default_factory=list)
+    education: list[ResumeEducation] = Field(default_factory=list)
     certifications: list[str] = Field(default_factory=list)
