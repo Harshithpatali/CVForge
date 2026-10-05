@@ -10,7 +10,7 @@ from app.models.entities import (
     PromptVersion,
     ResumeArtifact,
 )
-from app.schemas.cv import CandidateProfile, JobProfile
+from app.schemas.cv import CandidateProfile, JobProfile, Project
 from app.schemas.resume import GeneratedResume
 from app.services.ats_validator import validate
 from app.services.llm import generate_resume
@@ -43,6 +43,85 @@ def _prompt_version(db: Session, template, prompt_text: str) -> PromptVersion:
     return row
 
 
+def _normalise_url(value: str | None) -> str:
+    value = (value or "").strip()
+    if value.startswith("www."):
+        return f"https://{value}"
+    return value
+
+
+def _apply_link_evidence(candidate: CandidateProfile, answers: dict[str, str]) -> None:
+    contact = candidate.contact
+
+    for key, attr in (
+        ("linkedin_url", "linkedin"),
+        ("portfolio_url", "portfolio"),
+        ("github_url", "github"),
+    ):
+        value = _normalise_url(answers.get(key))
+        if value:
+            setattr(contact, attr, value)
+
+    for idx, project in enumerate(candidate.projects):
+        name = (answers.get(f"project_name_{idx}") or "").strip()
+        url = _normalise_url(answers.get(f"project_url_{idx}"))
+
+        if name:
+            project.name = name
+        if url:
+            project.url = url
+
+    for idx in (1, 2):
+        name = (answers.get(f"additional_project_{idx}_name") or "").strip()
+        url = _normalise_url(answers.get(f"additional_project_{idx}_url"))
+
+        if name and url:
+            candidate.projects.append(Project(name=name, url=url))
+
+
+def _contact_line_from_evidence(candidate: CandidateProfile, fallback: str) -> str:
+    contact = candidate.contact
+    parts: list[str] = []
+
+    for value in (contact.email, contact.phone, contact.location):
+        value = (value or "").strip()
+        if value and value not in parts:
+            parts.append(value)
+
+    for label, value in (
+        ("LinkedIn", contact.linkedin),
+        ("Portfolio", contact.portfolio),
+        ("GitHub", contact.github),
+    ):
+        value = (value or "").strip()
+        if value:
+            parts.append(f"{label}: {value}")
+
+    return " | ".join(parts) if parts else fallback
+
+
+def _project_key(name: str) -> str:
+    return " ".join((name or "").lower().split())
+
+
+def _restore_project_links(resume: GeneratedResume, candidate: CandidateProfile) -> None:
+    candidate_by_name = {
+        _project_key(project.name): project.url
+        for project in candidate.projects
+        if project.url
+    }
+
+    for idx, project in enumerate(resume.projects):
+        if project.url:
+            continue
+
+        exact = candidate_by_name.get(_project_key(project.name))
+        if exact:
+            project.url = exact
+        elif idx < len(candidate.projects) and candidate.projects[idx].url:
+            project.url = candidate.projects[idx].url
+
+
 def _record_failure(
     db: Session,
     application_id: int,
@@ -50,7 +129,6 @@ def _record_failure(
     answers: dict[str, str],
     exc: Exception,
 ) -> None:
-    """Best-effort failure persistence without hiding the original exception."""
     error_text = str(exc)[:4000]
 
     try:
@@ -72,8 +150,6 @@ def _record_failure(
             db.flush()
             return
     except Exception:
-        # PostgreSQL marks the transaction failed after a database error.
-        # Rebuild the failure record in a clean transaction.
         db.rollback()
 
     try:
@@ -102,7 +178,6 @@ def _record_failure(
         )
         db.flush()
     except Exception:
-        # Do not mask the actual generation error with an audit-record error.
         db.rollback()
 
 
@@ -154,25 +229,25 @@ def generate_for_application(
                 application.candidate_json or {}
             )
 
-        template = select_template(
-            job.role_family,
-            job.seniority,
-            job.domain,
-        )
+        _apply_link_evidence(candidate, answers)
+
+        template = select_template(job.role_family, job.seniority, job.domain)
         prompt = build_generation_prompt(
             job.model_dump(),
             candidate.model_dump(exclude={"raw_text"}),
             answers,
             template,
         )
-        prompt_version = _prompt_version(
-            db,
-            template,
-            template.instructions,
-        )
+        prompt_version = _prompt_version(db, template, template.instructions)
 
         raw = generate_resume(prompt)
         resume = GeneratedResume.model_validate(raw)
+        resume.contact_line = _contact_line_from_evidence(
+            candidate,
+            resume.contact_line,
+        )
+        _restore_project_links(resume, candidate)
+
         ats = validate(resume, job, candidate)
 
         latest = (
