@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+
 @dataclass(frozen=True)
 class PromptTemplate:
     key: str
@@ -9,19 +10,25 @@ class PromptTemplate:
     version: int
     instructions: str
 
+
 BASE = """You are CVForge, an evidence-first resume tailoring engine.
 You must tailor a resume to the target job without inventing facts.
 
 HARD RULES:
 1. Use only evidence present in the candidate profile or explicit user answers.
-2. Never invent employers, dates, degrees, technologies, certifications, metrics, job titles, or achievements.
+2. Never invent employers, dates, degrees, technologies, certifications, metrics, job titles, achievements, or URLs.
 3. Rewrite wording only for relevance, clarity, ATS alignment, and impact.
 4. Do not add a skill merely because it appears in the job description.
 5. If evidence for a required skill is absent, omit it from the resume.
 6. Prefer quantified achievements only when the source contains a real number.
-7. Keep the resume concise and ATS-readable.
-8. Return ONLY valid JSON matching the requested schema.
+7. Preserve candidate-provided LinkedIn, portfolio, GitHub, and project URLs exactly; never replace them with fabricated links.
+8. If a project URL is provided, put it in that project's "url" field.
+9. The contact line should contain available email/phone/location plus the provided LinkedIn, Portfolio, and GitHub URLs in a compact ATS-readable format.
+10. Never output a placeholder such as "linkedin.com/yourname", "github.com/username", "example.com", or "project-link".
+11. Keep the resume concise and ATS-readable.
+12. Return ONLY valid JSON matching the requested schema.
 """
+
 
 ROLE_GUIDANCE = {
     "data_science": "Prioritize statistical reasoning, experimentation, ML modeling, business impact, Python/SQL, evaluation metrics, and end-to-end analytical work.",
@@ -33,6 +40,7 @@ ROLE_GUIDANCE = {
     "general": "Prioritize the strongest evidence that directly maps to the target role.",
 }
 
+
 DOMAIN_GUIDANCE = {
     "fintech": "Use precise risk/finance terminology only when supported by candidate evidence.",
     "healthcare": "Prioritize accuracy, validation, governance, and domain-relevant analytical evidence when supported.",
@@ -42,33 +50,91 @@ DOMAIN_GUIDANCE = {
     "general": "",
 }
 
+
 def select_template(role_family: str, seniority: str, domain: str) -> PromptTemplate:
     role = role_family if role_family in ROLE_GUIDANCE else "general"
-    senior = seniority if seniority in {"intern", "entry", "mid", "senior", "staff"} else "entry"
+    senior = (
+        seniority
+        if seniority in {"intern", "entry", "mid", "senior", "staff"}
+        else "entry"
+    )
     dom = domain if domain in DOMAIN_GUIDANCE else "general"
-    key = f"resume.{role}.{senior}.{dom}"
-    instructions = f"{BASE}\nROLE GUIDANCE: {ROLE_GUIDANCE[role]}\nDOMAIN GUIDANCE: {DOMAIN_GUIDANCE[dom]}"
-    if senior in {"intern", "entry"}:
-        instructions += "\nSENIORITY GUIDANCE: Emphasize projects, education, internships, practical evidence, and demonstrated skills."
-    elif senior == "mid":
-        instructions += "\nSENIORITY GUIDANCE: Emphasize ownership, measurable outcomes, and breadth of delivery."
-    else:
-        instructions += "\nSENIORITY GUIDANCE: Emphasize leadership, architecture, scope, and business impact only where evidenced."
-    return PromptTemplate(key, role, senior, dom, 1, instructions)
 
-def build_generation_prompt(job: dict, candidate: dict, answers: dict, template: PromptTemplate) -> str:
+    key = f"resume.{role}.{senior}.{dom}"
+    instructions = (
+        f"{BASE}\n"
+        f"ROLE GUIDANCE: {ROLE_GUIDANCE[role]}\n"
+        f"DOMAIN GUIDANCE: {DOMAIN_GUIDANCE[dom]}"
+    )
+
+    if senior in {"intern", "entry"}:
+        instructions += (
+            "\nSENIORITY GUIDANCE: Emphasize projects, education, internships, "
+            "practical evidence, and demonstrated skills."
+        )
+    elif senior == "mid":
+        instructions += (
+            "\nSENIORITY GUIDANCE: Emphasize ownership, measurable outcomes, "
+            "and breadth of delivery."
+        )
+    else:
+        instructions += (
+            "\nSENIORITY GUIDANCE: Emphasize leadership, architecture, scope, "
+            "and business impact only where evidenced."
+        )
+
+    return PromptTemplate(
+        key,
+        role,
+        senior,
+        dom,
+        1,
+        instructions,
+    )
+
+
+def build_generation_prompt(
+    job: dict,
+    candidate: dict,
+    answers: dict,
+    template: PromptTemplate,
+) -> str:
     import json
+
     schema = {
         "name": "string",
         "contact_line": "string",
         "headline": "string",
         "summary": "string",
         "skills": ["string"],
-        "experience": [{"company":"string","title":"string","dates":"string","location":"string","bullets":["string"]}],
-        "projects": [{"name":"string","bullets":["string"],"technologies":["string"],"url":"string"}],
-        "education": [{"institution":"string","degree":"string","field":"string","dates":"string"}],
-        "certifications": ["string"]
+        "experience": [
+            {
+                "company": "string",
+                "title": "string",
+                "dates": "string",
+                "location": "string",
+                "bullets": ["string"],
+            }
+        ],
+        "projects": [
+            {
+                "name": "string",
+                "bullets": ["string"],
+                "technologies": ["string"],
+                "url": "string",
+            }
+        ],
+        "education": [
+            {
+                "institution": "string",
+                "degree": "string",
+                "field": "string",
+                "dates": "string",
+            }
+        ],
+        "certifications": ["string"],
     }
+
     return f"""{template.instructions}
 
 TARGET JOB:
@@ -83,5 +149,9 @@ ADDITIONAL USER ANSWERS:
 OUTPUT JSON SCHEMA:
 {json.dumps(schema, ensure_ascii=False)}
 
-Create the strongest truthful ATS-friendly resume for this exact job. Reorder and rewrite evidence to maximize relevance, but never fabricate evidence.
+Create the strongest truthful ATS-friendly resume for this exact job.
+Use a compact modern one-column structure suitable for a LaTeX-style professional CV.
+Prioritize the strongest evidence, concise bullets, measurable outcomes, and relevant projects.
+Keep provided URLs intact and include them; never invent missing links.
+Reorder and rewrite evidence to maximize relevance, but never fabricate evidence.
 """
