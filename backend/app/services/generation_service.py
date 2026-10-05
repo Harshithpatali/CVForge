@@ -30,6 +30,7 @@ def generate_for_application(db: Session, application: Application, answers: dic
     gen = GenerationJob(application_id=application.id, status='running', input_json={'answers': answers}, attempts=1, started_at=datetime.utcnow())
     db.add(gen)
     db.flush()
+    db.add(GenerationEvent(generation_job_id=gen.id, event_type='generation_started', payload={}))
     template = select_template(job.role_family, job.seniority, job.domain)
     prompt = build_generation_prompt(job.model_dump(), candidate.model_dump(exclude={'raw_text'}), answers, template)
     pv = _prompt_version(db, template, template.instructions)
@@ -44,6 +45,7 @@ def generate_for_application(db: Session, application: Application, answers: dic
         gen.status = 'completed'
         gen.finished_at = datetime.utcnow()
         application.status = 'completed'
+        db.add(GenerationEvent(generation_job_id=gen.id, event_type='generation_completed', payload={'resume_id': artifact.id, 'ats_score': ats.get('score')}))
         db.flush()
         return gen, artifact
     except Exception as exc:
@@ -51,5 +53,6 @@ def generate_for_application(db: Session, application: Application, answers: dic
         gen.error = str(exc)
         gen.finished_at = datetime.utcnow()
         application.status = 'failed'
+        db.add(GenerationEvent(generation_job_id=gen.id, event_type='generation_failed', payload={'error': str(exc)[:1000]}))
         db.flush()
         raise
