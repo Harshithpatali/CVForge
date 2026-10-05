@@ -371,6 +371,7 @@ def render_docx(resume: dict) -> bytes:
     run = name.add_run(_normalise_text(resume.get("name", "Resume")))
     run.bold = True
     run.font.size = Pt(18)
+    run.font.color.rgb = RGBColor(22, 71, 142)
 
     if resume.get("contact_line"):
         p = doc.add_paragraph()
@@ -401,6 +402,7 @@ def render_docx(resume: dict) -> bytes:
         run = p.add_run(text.upper())
         run.bold = True
         run.font.size = Pt(10)
+        run.font.color.rgb = RGBColor(22, 71, 142)
         p.paragraph_format.space_before = Pt(6)
         p.paragraph_format.space_after = Pt(1)
 
