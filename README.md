@@ -12,7 +12,7 @@ Streamlit Community Cloud
 FastAPI on Render
    |            |
    v            v
-Neon PostgreSQL  xAI Grok
+Neon PostgreSQL  Groq GPT-OSS 120B
 ```
 
 The current deployment uses one synchronous FastAPI service. This is appropriate for a Render Free portfolio deployment. Generation is isolated in `generation_service.py`, so a queue/worker can be introduced later without redesigning the product.
@@ -23,7 +23,7 @@ The current deployment uses one synchronous FastAPI service. This is appropriate
 2. Parse the JD into role family, seniority, domain, skills, and keywords.
 3. Ask targeted evidence questions when requirements lack evidence.
 4. Select a versioned prompt template based on role, seniority, and domain.
-5. Generate with Grok using only candidate evidence and explicit answers.
+5. Generate with GPT-OSS 120B on Groq using only candidate evidence and explicit answers.
 6. Validate ATS alignment deterministically.
 7. Store applications, prompt versions, generation jobs, and immutable resume revisions in PostgreSQL.
 8. Render PDF/DOCX on demand.
@@ -52,9 +52,9 @@ CVForge/
 
 ```env
 DATABASE_URL=postgresql://...
-XAI_API_KEY=xai-...
-XAI_MODEL=grok-4.7
-XAI_BASE_URL=https://api.x.ai/v1
+GROQ_API_KEY=gsk_...
+GROQ_MODEL=openai/gpt-oss-120b
+GROQ_BASE_URL=https://api.groq.com/openai/v1
 JWT_SECRET=<strong-random-secret>
 CORS_ORIGINS=*
 ```
@@ -95,6 +95,6 @@ CVFORGE_API_URL = "https://<your-render-backend>.onrender.com"
 - Candidate CV text is treated as evidence and unsupported claims are prohibited.
 - The ATS score is deterministic and independent of the LLM's self-evaluation.
 
-## xAI
+## Groq
 
-CVForge uses xAI's OpenAI-compatible API through the official Python OpenAI client with `https://api.x.ai/v1` as the base URL.
+CVForge uses Groq's OpenAI-compatible API through the official Python OpenAI client with `https://api.groq.com/openai/v1` and the `openai/gpt-oss-120b` model.
