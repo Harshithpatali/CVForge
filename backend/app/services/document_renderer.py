@@ -87,7 +87,7 @@ def _add_hyperlink(paragraph, text: str, url: str):
     properties = OxmlElement("w:rPr")
 
     color = OxmlElement("w:color")
-    color.set(qn("w:val"), "0563C1")
+    color.set(qn("w:val"), "16478E")
     properties.append(color)
 
     underline = OxmlElement("w:u")
@@ -127,7 +127,7 @@ def _section(story, title, style):
         HRFlowable(
             width="100%",
             thickness=0.6,
-            color="#333333",
+            color="#16478E",
             spaceBefore=1,
             spaceAfter=4,
         )
@@ -166,6 +166,7 @@ def render_pdf(resume: dict) -> bytes:
         fontName="Helvetica-Bold",
         fontSize=10.2,
         leading=11,
+        textColor="#16478E",
         spaceBefore=6,
         spaceAfter=0,
     )
