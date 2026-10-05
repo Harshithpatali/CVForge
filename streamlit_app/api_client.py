@@ -1,7 +1,12 @@
 import os
 import requests
+import streamlit as st
 
-API_URL = os.getenv('CVFORGE_API_URL', 'http://localhost:8000').rstrip('/')
+try:
+    secret_url = st.secrets.get('CVFORGE_API_URL', '')
+except Exception:
+    secret_url = ''
+API_URL = (secret_url or os.getenv('CVFORGE_API_URL', 'http://localhost:8000')).rstrip('/')
 
 class APIError(Exception):
     pass
