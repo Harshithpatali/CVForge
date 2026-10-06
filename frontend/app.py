@@ -1637,7 +1637,7 @@ def new_application() -> None:
                 result = post(
                     f"/api/v1/jobs/applications/{created['id']}/generate",
                     st.session_state.token,
-                    json={"answers": answers_local},
+                    json=answers_local,
                 )
 
                 ats_score = float(
