@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     # Comma-separated fallback models used when Gemini returns transient 429/5xx errors.
     gemini_fallback_models: str = 'gemini-3.6-flash,gemini-3.5-flash-lite'
     gemini_retry_attempts: int = 2
+    gemini_fast_model: str = 'gemini-3.5-flash-lite'
+    gemini_embedding_model: str = 'gemini-embedding-2'
+    gemini_embedding_dimension: int = 768
 
     # Authentication
     jwt_secret: str = 'change-me-in-production'
