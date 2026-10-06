@@ -1706,8 +1706,7 @@ def render_resume(result: Dict[str, Any]) -> None:
         )
 
         st.markdown(
-            f"**{esc(verdict[0])}**  
-"
+            f"**{esc(verdict[0])}**  \\n"
             f"<span class='cvf-muted'>{esc(verdict[1])}</span>",
             unsafe_allow_html=True,
         )
