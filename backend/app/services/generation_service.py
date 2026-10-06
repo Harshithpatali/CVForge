@@ -13,6 +13,8 @@ from app.models.entities import (
 from app.schemas.cv import CandidateProfile, JobProfile, Project, ProjectLink
 from app.schemas.resume import GeneratedResume, ResumeLink, ResumeProject
 from app.services.llm import evaluate_ats, generate_resume
+from app.services.ats_validator import validate as deterministic_ats_validate
+from app.services.semantic_matcher import semantic_job_match
 from app.services.prompt_engine import build_generation_prompt, select_template
 
 
@@ -385,11 +387,68 @@ def generate_for_application(
         }
 
         # Step 2: Gemini independently evaluates the generated CV against the JD.
+        resume_eval = resume.model_dump()
+
+        # Three-signal evaluation:
+        # 1) Gemini qualitative judge
+        # 2) Gemini embedding semantic similarity
+        # 3) deterministic evidence/ATS checks
         ats = evaluate_ats(
             job.model_dump(),
-            resume.model_dump(),
+            resume_eval,
             candidate.model_dump(exclude={"raw_text"}),
         )
+        gemini_score = float(ats.get("score", 0) or 0)
+
+        semantic_scores = None
+        try:
+            semantic_scores = semantic_job_match(
+                job.model_dump(),
+                resume_eval,
+            )
+        except Exception as exc:
+            db.add(
+                GenerationEvent(
+                    generation_job_id=generation_job.id,
+                    event_type="semantic_match_unavailable",
+                    payload={"error": str(exc)[:500]},
+                )
+            )
+
+        deterministic = deterministic_ats_validate(
+            resume,
+            job,
+            candidate,
+        )
+
+        semantic_overall = (
+            float(semantic_scores.get("overall", 0))
+            if semantic_scores
+            else None
+        )
+        hybrid_score = round(
+            0.55 * gemini_score
+            + 0.30 * (semantic_overall if semantic_overall is not None else deterministic["score"])
+            + 0.15 * float(deterministic["score"]),
+            1,
+        )
+
+        ats["gemini_score"] = round(gemini_score, 1)
+        ats["semantic_match_score"] = semantic_overall
+        ats["semantic_skill_score"] = (
+            semantic_scores.get("skills") if semantic_scores else None
+        )
+        ats["semantic_responsibility_score"] = (
+            semantic_scores.get("responsibilities") if semantic_scores else None
+        )
+        ats["deterministic_score"] = deterministic["score"]
+        ats["deterministic_checks"] = {
+            "keyword_coverage": deterministic["keyword_coverage"],
+            "section_score": deterministic["section_score"],
+            "link_coverage": deterministic["link_coverage"],
+            "warnings": deterministic["warnings"],
+        }
+        ats["score"] = hybrid_score
 
         latest = (
             db.query(ResumeArtifact)
