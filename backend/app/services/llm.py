@@ -1,5 +1,7 @@
 import json
 
+from google import genai
+from google.genai import types
 from openai import OpenAI
 
 from app.core.config import settings
@@ -114,19 +116,25 @@ RESUME_JSON_SCHEMA = {
     "required": REQUIRED_RESUME_FIELDS,
 }
 
+SYSTEM_PROMPT = (
+    "Return the complete CVForge resume schema. Every required field must be "
+    "present, including empty arrays when there is no evidence. Never invent "
+    "facts or URLs."
+)
+
 
 def _extract_json(text: str) -> dict:
-    text = text.strip()
+    text = (text or "").strip()
     try:
         value = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise ValueError("Groq did not return valid JSON.") from exc
+        raise ValueError("LLM did not return valid JSON.") from exc
     if not isinstance(value, dict):
-        raise ValueError("Groq resume response must be a JSON object.")
+        raise ValueError("LLM resume response must be a JSON object.")
     return value
 
 
-def generate_resume(prompt: str) -> dict:
+def _generate_with_groq(prompt: str) -> dict:
     if not settings.groq_api_key:
         raise RuntimeError("GROQ_API_KEY is not configured.")
 
@@ -139,11 +147,7 @@ def generate_resume(prompt: str) -> dict:
         messages=[
             {
                 "role": "system",
-                "content": (
-                    "Return the complete CVForge resume schema. Every required field "
-                    "must be present, including empty arrays when there is no evidence. "
-                    "Never invent facts or URLs."
-                ),
+                "content": SYSTEM_PROMPT,
             },
             {"role": "user", "content": prompt},
         ],
@@ -159,3 +163,38 @@ def generate_resume(prompt: str) -> dict:
         },
     )
     return _extract_json(response.choices[0].message.content or "")
+
+
+def _generate_with_gemini(prompt: str) -> dict:
+    if not settings.gemini_api_key:
+        raise RuntimeError("GEMINI_API_KEY is not configured.")
+
+    client = genai.Client(api_key=settings.gemini_api_key)
+    response = client.models.generate_content(
+        model=settings.gemini_model,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            temperature=0.2,
+            max_output_tokens=5000,
+            response_mime_type="application/json",
+            response_json_schema=RESUME_JSON_SCHEMA,
+        ),
+    )
+
+    return _extract_json(getattr(response, "text", "") or "")
+
+
+def generate_resume(prompt: str) -> dict:
+    provider = settings.llm_provider.strip().lower()
+
+    if provider == "groq":
+        return _generate_with_groq(prompt)
+
+    if provider == "gemini":
+        return _generate_with_gemini(prompt)
+
+    raise RuntimeError(
+        f"Unsupported LLM_PROVIDER '{settings.llm_provider}'. "
+        "Use 'groq' or 'gemini'."
+    )
