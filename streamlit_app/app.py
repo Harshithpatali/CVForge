@@ -351,6 +351,80 @@ input, textarea{font-size:.92rem !important;color:var(--cvf-text) !important;}
 }
 .cvf-repo{border-left:3px solid var(--cvf-accent);padding-left:.85rem;margin:.35rem 0;}
 .cvf-repo__name{font-weight:700;color:var(--cvf-text);}
+
+.cvf-workspace-hero{
+  display:grid;
+  grid-template-columns:minmax(0,1.7fr) minmax(260px,.9fr);
+  gap:1rem;
+  margin-bottom:1.1rem;
+}
+.cvf-hero-card{
+  background:linear-gradient(135deg,#ffffff 0%,#f8faff 100%);
+  border:1px solid var(--cvf-border);
+  border-radius:18px;
+  padding:1.35rem 1.45rem;
+  box-shadow:var(--cvf-shadow);
+}
+.cvf-hero-card--soft{
+  background:linear-gradient(135deg,#f7f5ff 0%,#f3fbf8 100%);
+}
+.cvf-hero-card__eyebrow{
+  font-size:.7rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--cvf-accent);margin-bottom:.45rem;
+}
+.cvf-hero-card__title{
+  font-size:1.55rem;font-weight:800;letter-spacing:-.03em;line-height:1.15;
+  color:var(--cvf-text);margin-bottom:.45rem;
+}
+.cvf-hero-card__body{
+  color:var(--cvf-muted);font-size:.9rem;line-height:1.6;max-width:62ch;
+}
+.cvf-model-row{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.8rem;}
+.cvf-model{
+  display:inline-flex;align-items:center;gap:.35rem;padding:.32rem .6rem;border-radius:999px;
+  font-size:.72rem;font-weight:700;border:1px solid var(--cvf-border);background:#fff;
+}
+.cvf-model--groq{color:#4338ca;border-color:rgba(79,70,229,.2);background:#eef2ff;}
+.cvf-model--gemini{color:#047857;border-color:rgba(5,150,105,.2);background:#ecfdf5;}
+.cvf-mini-title{font-size:.82rem;font-weight:800;color:var(--cvf-text);margin-bottom:.55rem;}
+.cvf-mini-step{display:flex;gap:.6rem;align-items:flex-start;margin:.55rem 0;}
+.cvf-mini-step__n{
+  width:1.55rem;height:1.55rem;border-radius:50%;background:var(--cvf-accent-weak);
+  color:var(--cvf-accent-dark);display:flex;align-items:center;justify-content:center;
+  font-size:.72rem;font-weight:800;flex:0 0 auto;
+}
+.cvf-mini-step__body{font-size:.78rem;line-height:1.45;color:var(--cvf-muted);}
+.cvf-mini-step__body strong{color:var(--cvf-text);}
+.cvf-form-shell{
+  background:var(--cvf-surface);
+  border:1px solid var(--cvf-border);
+  border-radius:18px;
+  box-shadow:var(--cvf-shadow);
+  padding:1.15rem 1.2rem 1.2rem;
+  margin-bottom:1rem;
+}
+.cvf-form-head{
+  display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:.85rem;
+}
+.cvf-form-title{font-size:1rem;font-weight:800;color:var(--cvf-text);}
+.cvf-form-sub{font-size:.78rem;color:var(--cvf-muted);}
+.cvf-step-number{
+  width:2rem;height:2rem;border-radius:10px;background:var(--cvf-accent);
+  color:#fff;font-weight:800;display:inline-flex;align-items:center;justify-content:center;
+}
+.cvf-upload-card{
+  border:1px dashed var(--cvf-border-strong);
+  border-radius:14px;padding:.7rem .85rem;background:var(--cvf-surface-2);
+}
+.cvf-action-row{
+  display:flex;align-items:center;justify-content:space-between;gap:.8rem;
+  padding:.85rem .95rem;border-radius:14px;background:#0f172a;color:#fff;margin-top:.9rem;
+}
+.cvf-action-row__copy strong{display:block;font-size:.84rem;color:#fff;}
+.cvf-action-row__copy span{font-size:.74rem;color:#cbd5e1;}
+@media (max-width:900px){
+  .cvf-workspace-hero{grid-template-columns:1fr;}
+}
 </style>
 """
 
@@ -1192,10 +1266,36 @@ def collect_link_evidence(candidate: Dict[str, Any], seq: int) -> Dict[str, str]
 # --------------------------------------------------------------------------- #
 
 def new_application() -> None:
-    page_header(
-        "CV Enhance",
-        "Paste the target job description, confirm your evidence, then generate an ATS-validated CV.",
-        eyebrow="Workspace",
+    # ------------------------------------------------------------------ #
+    # Workspace hero
+    # ------------------------------------------------------------------ #
+    st.markdown(
+        '<div class="cvf-workspace-hero">'
+        '<div class="cvf-hero-card">'
+        '<div class="cvf-hero-card__eyebrow">CV Enhance · Step 01</div>'
+        '<div class="cvf-hero-card__title">Build a CV that is tailored to the role — not a generic template.</div>'
+        '<div class="cvf-hero-card__body">'
+        'Start with the actual job description. CVForge extracts the role requirements, '
+        'combines them with your verified evidence, lets you review everything, then '
+        'generates the CV with Groq and independently scores it with Gemini.'
+        '</div>'
+        '<div class="cvf-model-row">'
+        '<span class="cvf-model cvf-model--groq">● Groq · Generate CV</span>'
+        '<span class="cvf-model cvf-model--gemini">● Gemini · ATS review</span>'
+        '<span class="cvf-model">◆ Evidence-first</span>'
+        '</div>'
+        '</div>'
+        '<div class="cvf-hero-card cvf-hero-card--soft">'
+        '<div class="cvf-mini-title">How this works</div>'
+        '<div class="cvf-mini-step"><div class="cvf-mini-step__n">1</div>'
+        '<div class="cvf-mini-step__body"><strong>Paste the JD</strong><br>We extract role, seniority, domain and required skills.</div></div>'
+        '<div class="cvf-mini-step"><div class="cvf-mini-step__n">2</div>'
+        '<div class="cvf-mini-step__body"><strong>Confirm evidence</strong><br>Edit your profile and verify public project evidence.</div></div>'
+        '<div class="cvf-mini-step"><div class="cvf-mini-step__n">3</div>'
+        '<div class="cvf-mini-step__body"><strong>Generate + evaluate</strong><br>Groq builds the CV; Gemini reviews the result.</div></div>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
     )
 
     if not st.session_state.analysis:
@@ -1207,55 +1307,106 @@ def new_application() -> None:
 
     stepper(["Target role", "Evidence & profile", "Generated CV"], current_step)
 
-    # ----- Step 1: job description ---------------------------------------- #
-    with st.container(border=True):
-        st.markdown("#### 1 · Target role")
-
-        mode = st.radio(
-            "CV workflow",
-            ["Enhance existing CV", "Build CV from scratch"],
-            horizontal=True,
-            key="cv_mode",
+    with st.container(border=False):
+        # -------------------------------------------------------------- #
+        # Target role intake
+        # -------------------------------------------------------------- #
+        st.markdown(
+            '<div class="cvf-form-shell">'
+            '<div class="cvf-form-head">'
+            '<div><div class="cvf-form-title">Tell us about the opportunity</div>'
+            '<div class="cvf-form-sub">Paste the complete posting for the strongest match.</div></div>'
+            '<div class="cvf-step-number">1</div>'
+            '</div>',
+            unsafe_allow_html=True,
         )
+
+        if hasattr(st, "pills"):
+            mode = st.pills(
+                "CV workflow",
+                ["Enhance existing CV", "Build CV from scratch"],
+                default="Enhance existing CV",
+                key="cv_mode",
+                label_visibility="collapsed",
+            )
+        else:
+            mode = st.radio(
+                "CV workflow",
+                ["Enhance existing CV", "Build CV from scratch"],
+                horizontal=True,
+                key="cv_mode",
+                label_visibility="collapsed",
+            )
 
         jd = st.text_area(
-            "Target job description",
+            "Job description",
             key="jd_input",
-            height=240,
-            placeholder="Paste the complete job description here — responsibilities, requirements and nice-to-haves…",
-            help="More context produces a better match. Include the full posting if you have it.",
+            height=250,
+            placeholder=(
+                "Paste the complete job description…\n\n"
+                "Include responsibilities, required skills, qualifications, preferred skills and tools."
+            ),
+            help="A complete job posting gives Gemini and the generation engine more evidence to work with.",
         )
+        jd_words = len((jd or "").split())
+        st.caption(f"{jd_words:,} words · {len(jd or ""):,} characters")
 
+        st.markdown(
+            '<div class="cvf-upload-card">'
+            '<div class="cvf-mini-title">Existing CV <span class="cvf-muted">(optional)</span></div>'
+            '<div class="cvf-muted">Upload a PDF, DOCX, TXT or Markdown file. Every extracted field remains editable.</div>',
+            unsafe_allow_html=True,
+        )
         cv = st.file_uploader(
-            "Upload existing CV (optional)",
+            "Upload existing CV",
             type=["pdf", "docx", "txt", "md"],
             key="cv_upload",
-            help="Every extracted field remains editable below.",
+            label_visibility="collapsed",
+            help="Maximum upload size is controlled by the Streamlit deployment.",
         )
+        st.markdown("</div>", unsafe_allow_html=True)
 
         if mode == "Build CV from scratch":
-            st.caption("No upload required — fill in the profile fields after analysis.")
+            st.markdown(
+                '<div class="cvf-note" style="margin-top:.75rem">'
+                '<strong>Starting from zero?</strong> No CV upload is required. '
+                'After analysis, CVForge will open the complete evidence editor.'
+                '</div>',
+                unsafe_allow_html=True,
+            )
 
-        c1, c2 = st.columns([2, 1])
-        analyze = c1.button(
-            "Analyze job description",
-            type="primary",
-            disabled=not jd.strip(),
-            key="analyze_button",
-            **FW,
-        )
-        if c2.button("Start over", key="reset_button", **FW):
+        c1, c2 = st.columns([1, 1], gap="small")
+        with c1:
+            analyze = st.button(
+                "Analyze job description →",
+                type="primary",
+                disabled=not jd.strip(),
+                key="analyze_button",
+                **FW,
+            )
+        with c2:
+            reset = st.button(
+                "Clear workspace",
+                key="reset_button",
+                **FW,
+            )
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        if reset:
             st.session_state.analysis = None
             st.session_state.resume = None
             st.session_state.application = None
             st.session_state.github_repos = []
+            st.session_state.link_answers = {}
             st.session_state.form_seq = st.session_state.get("form_seq", 0) + 1
             st.rerun()
 
     if analyze:
         result: Optional[Dict[str, Any]] = None
         try:
-            with st.spinner("Reading the job description and extracting your evidence…"):
+            with st.status("Analyzing the opportunity…", expanded=True) as status:
+                st.write("Reading the job description")
                 files = (
                     {"cv": (cv.name, cv.getvalue(), cv.type or "application/octet-stream")}
                     if cv is not None
@@ -1269,6 +1420,8 @@ def new_application() -> None:
                     files=files,
                 )
                 result = response.json()
+                st.write("Extracting role and candidate signals")
+                status.update(label="Job analysis complete", state="complete")
         except APIError as exc:
             show_error(exc)
 
@@ -1277,6 +1430,7 @@ def new_application() -> None:
             st.session_state.application = None
             st.session_state.resume = None
             st.session_state.github_repos = []
+            st.session_state.link_answers = {}
             st.session_state.form_seq = st.session_state.get("form_seq", 0) + 1
             flash("success", "Job description analyzed.")
             st.rerun()
@@ -1419,8 +1573,8 @@ def render_resume(result: Dict[str, Any]) -> None:
     head_left, head_right = st.columns([3, 2])
     with head_left:
         page_header(
-            "Tailored CV",
-            "Generated by Groq and independently evaluated by Gemini against the job description.",
+            "Your tailored CV",
+            "Generated by Groq and independently evaluated by Gemini against the exact job description.",
             eyebrow="Result",
         )
     with head_right:
