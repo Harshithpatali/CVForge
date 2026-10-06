@@ -664,7 +664,16 @@ def render_resume(result):
         elif key=='projects':
             for x in values:
                 st.markdown(f"**_{x.get('name','')}_**")
-                if x.get('url'):
+                links = x.get('links') or []
+                if links:
+                    st.markdown(
+                        " | ".join(
+                            f"[{link.get('label', 'Project')}]({_normalise_url(link.get('url', ''))})"
+                            for link in links
+                            if link.get('url')
+                        )
+                    )
+                elif x.get('url'):
                     st.markdown(f"[Project link]({_normalise_url(x['url'])})")
                 if x.get('technologies'): st.caption(', '.join(x['technologies']))
                 for b in x.get('bullets',[]): st.markdown(f'- {b}')
@@ -683,10 +692,36 @@ def render_resume(result):
     if edited.get('projects'):
         st.caption('Project links')
         for idx,project in enumerate(edited['projects']):
-            edited['projects'][idx]['url']=st.text_input(
-                f"{project.get('name','Project')} link",
-                value=project.get('url',''),
-                key=f"edit_project_url_{result.get('resume_id')}_{idx}"
+            links = project.get('links') or []
+            github_default = next(
+                (link.get('url','') for link in links if link.get('label') == 'GitHub'),
+                ''
+            )
+            demo_default = next(
+                (link.get('url','') for link in links if link.get('label') in {'Live Demo','Project'}),
+                ''
+            )
+            c1,c2 = st.columns(2)
+            github = c1.text_input(
+                f"{project.get('name','Project')} — GitHub",
+                value=github_default,
+                key=f"edit_project_github_{result.get('resume_id')}_{idx}"
+            )
+            demo = c2.text_input(
+                f"{project.get('name','Project')} — Live Demo",
+                value=demo_default,
+                key=f"edit_project_demo_{result.get('resume_id')}_{idx}"
+            )
+            edited['projects'][idx]['links'] = [
+                {'label':'GitHub','url':_normalise_url(github)}
+            ] if github.strip() else []
+            if demo.strip():
+                edited['projects'][idx]['links'].append(
+                    {'label':'Live Demo','url':_normalise_url(demo)}
+                )
+            edited['projects'][idx]['url'] = (
+                edited['projects'][idx]['links'][0]['url']
+                if edited['projects'][idx]['links'] else ''
             )
 
     if st.button('Save new resume revision'):
