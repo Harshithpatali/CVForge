@@ -378,6 +378,35 @@ def parse_candidate(text: str, filename: str) -> CandidateProfile:
 
     projects = _parse_projects(sec["projects"], text)
 
+    # PDF link annotations and LaTeX hrefs can be separated from visible
+    # project labels by the extractor. Attach unassigned project/demo URLs
+    # in source order so clickable links are not lost.
+    project_level_links: list[ProjectLink] = []
+    for link in all_links:
+        lower = link.url.lower()
+        if "linkedin" in lower or "portfolio" in lower:
+            continue
+        if "github.com/" in lower or link.label == "Live Demo":
+            project_level_links.append(link)
+        elif link.label == "Project":
+            project_level_links.append(link)
+        elif any(token in lower for token in ("streamlit", "render.com", "vercel.app")):
+            project_level_links.append(ProjectLink(label="Live Demo", url=link.url))
+
+    link_cursor = 0
+    for project in projects:
+        if project.links:
+            continue
+        attached: list[ProjectLink] = []
+        while link_cursor < len(project_level_links) and len(attached) < 2:
+            candidate_link = project_level_links[link_cursor]
+            link_cursor += 1
+            if not any(existing.url == candidate_link.url for existing in attached):
+                attached.append(candidate_link)
+        if attached:
+            project.links = attached
+            project.url = attached[0].url
+
     education_lines = parse_bullets(sec["education"])
     education: list[Education] = []
     if education_lines:
@@ -389,14 +418,16 @@ def parse_candidate(text: str, filename: str) -> CandidateProfile:
         )
 
     project_links = [link for project in projects for link in project.links]
-    candidate_github = github or next(
-        (
-            link.url
-            for link in project_links
-            if "github.com/" in link.url.lower()
-        ),
-        "",
-    )
+    candidate_github = github
+    if not candidate_github:
+        for link in project_links:
+            match = re.search(
+                r"github\.com/([^/?#]+)/?([^/?#]*)",
+                link.url.lower(),
+            )
+            if match and not match.group(2):
+                candidate_github = link.url
+                break
 
     return CandidateProfile(
         contact=Contact(
