@@ -13,10 +13,8 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import streamlit as st
 
-from api_client import API_URL, APIError, auth, download, get, post, put, request
-
 # --------------------------------------------------------------------------- #
-# Page configuration  (must be the first Streamlit call)
+# Page configuration — MUST run before importing modules that call Streamlit.
 # --------------------------------------------------------------------------- #
 
 st.set_page_config(
@@ -25,6 +23,10 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# api_client registers Streamlit resources/secrets at import time, so load it
+# only after set_page_config has executed.
+from api_client import API_URL, APIError, auth, download, get, post, put, request  # noqa: E402
 
 
 # --------------------------------------------------------------------------- #
