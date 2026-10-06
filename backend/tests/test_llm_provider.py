@@ -70,3 +70,75 @@ def test_gemini_ats_requires_api_key(monkeypatch):
         assert "GEMINI_API_KEY" in str(exc)
     else:
         raise AssertionError("Missing Gemini key should raise RuntimeError")
+
+
+def test_evaluate_ats_falls_back_after_transient_503(monkeypatch):
+    monkeypatch.setattr(settings, "gemini_api_key", "test-key")
+    monkeypatch.setattr(settings, "gemini_model", "gemini-3.8-flash")
+    monkeypatch.setattr(
+        settings,
+        "gemini_fallback_models",
+        "gemini-3.6-flash,gemini-3.5-flash-lite",
+    )
+
+    class FakeClient:
+        class Models:
+            calls = []
+
+            def generate_content(self, *, model, contents, config):
+                self.calls.append(model)
+                if model == "gemini-3.8-flash":
+                    raise llm.errors.APIError(
+                        code=503,
+                        response_json={"error": {"message": "high demand"}},
+                    )
+                return type(
+                    "Response",
+                    (),
+                    {
+                        "text": (
+                            '{"score": 81, "keyword_coverage": 80, '
+                            '"required_skill_coverage": 84, "title_alignment": 82, '
+                            '"responsibility_alignment": 79, "formatting_score": 90, '
+                            '"matched_keywords": ["Python"], "missing_keywords": ["Spark"], '
+                            '"strengths": ["Strong match"], "gaps": ["Spark missing"], '
+                            '"recommendations": ["Add Spark only if evidenced"], '
+                            '"warnings": []}'
+                        )
+                    },
+                )()
+
+        def __init__(self):
+            self.models = self.Models()
+
+    fake_client = FakeClient()
+    monkeypatch.setattr(llm, "_gemini_client", lambda: fake_client)
+
+    result = llm.evaluate_ats({"title": "Data Scientist"}, {"headline": "Data Scientist"})
+
+    assert result["score"] == 81
+    assert fake_client.models.calls == ["gemini-3.8-flash", "gemini-3.6-flash"]
+
+
+def test_evaluate_ats_rejects_non_transient_error(monkeypatch):
+    monkeypatch.setattr(settings, "gemini_api_key", "test-key")
+
+    class FakeClient:
+        class Models:
+            def generate_content(self, *, model, contents, config):
+                raise llm.errors.APIError(
+                    code=400,
+                    response_json={"error": {"message": "bad request"}},
+                )
+
+        def __init__(self):
+            self.models = self.Models()
+
+    monkeypatch.setattr(llm, "_gemini_client", lambda: FakeClient())
+
+    try:
+        llm.evaluate_ats({}, {})
+    except llm.errors.APIError as exc:
+        assert exc.code == 400
+    else:
+        raise AssertionError("Non-transient Gemini errors should not be retried")
