@@ -325,9 +325,26 @@ def generate_for_application(
         _apply_github_repository_evidence(candidate)
 
         template = select_template(job.role_family, job.seniority, job.domain)
+
+        candidate_payload = candidate.model_dump(exclude={"raw_text"})
+        compact_repositories = []
+        for repo in candidate_payload.get("github_repositories", [])[:5]:
+            compact = dict(repo)
+            compact["readme"] = str(repo.get("readme", ""))[:7000]
+            compact["important_files"] = list(repo.get("important_files", []))[:20]
+            compact["code_samples"] = [
+                {
+                    "path": sample.get("path", ""),
+                    "content": str(sample.get("content", ""))[:2000],
+                }
+                for sample in repo.get("code_samples", [])[:6]
+            ]
+            compact_repositories.append(compact)
+        candidate_payload["github_repositories"] = compact_repositories
+
         prompt = build_generation_prompt(
             job.model_dump(),
-            candidate.model_dump(exclude={"raw_text"}),
+            candidate_payload,
             answers,
             template,
         )
