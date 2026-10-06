@@ -21,6 +21,7 @@ if 'user' not in st.session_state: st.session_state.user=None
 if 'analysis' not in st.session_state: st.session_state.analysis=None
 if 'application' not in st.session_state: st.session_state.application=None
 if 'resume' not in st.session_state: st.session_state.resume=None
+if 'github_repos' not in st.session_state: st.session_state.github_repos=[]
 
 
 def logout():
@@ -171,55 +172,432 @@ def collect_link_evidence(candidate: dict) -> dict:
     return answers
 
 
+
+def _candidate_editor(candidate: dict) -> dict:
+    candidate = copy.deepcopy(candidate or {})
+    contact = candidate.setdefault("contact", {})
+    candidate.setdefault("experience", [])
+    candidate.setdefault("education", [])
+    candidate.setdefault("projects", [])
+    candidate.setdefault("skills", [])
+    candidate.setdefault("certifications", [])
+    candidate.setdefault("github_repositories", [])
+
+    st.subheader("Build / enhance your CV")
+    st.caption(
+        "Upload a CV when you have one, then correct or complete the extracted information below. "
+        "When no CV is uploaded, fill the same fields from scratch."
+    )
+
+    with st.expander("Personal information", expanded=True):
+        c1, c2 = st.columns(2)
+        contact["name"] = c1.text_input("Full name", value=contact.get("name", ""))
+        candidate["headline"] = c2.text_input(
+            "Professional headline",
+            value=candidate.get("headline", ""),
+            placeholder="Data Scientist | Machine Learning | Statistical Analysis",
+        )
+        c1, c2, c3 = st.columns(3)
+        contact["email"] = c1.text_input("Email", value=contact.get("email", ""))
+        contact["phone"] = c2.text_input("Phone", value=contact.get("phone", ""))
+        contact["location"] = c3.text_input(
+            "Location",
+            value=contact.get("location", ""),
+            placeholder="Karnataka, India",
+        )
+        c1, c2, c3 = st.columns(3)
+        contact["linkedin"] = c1.text_input(
+            "LinkedIn",
+            value=contact.get("linkedin", ""),
+            placeholder="https://linkedin.com/in/...",
+        )
+        contact["github"] = c2.text_input(
+            "GitHub profile",
+            value=contact.get("github", ""),
+            placeholder="https://github.com/...",
+        )
+        contact["portfolio"] = c3.text_input(
+            "Portfolio",
+            value=contact.get("portfolio", ""),
+            placeholder="https://...",
+        )
+
+    with st.expander("Professional summary", expanded=True):
+        candidate["summary"] = st.text_area(
+            "Summary",
+            value=candidate.get("summary", ""),
+            height=130,
+        )
+
+    with st.expander("Skills", expanded=True):
+        candidate["skills"] = [
+            x.strip()
+            for x in st.text_area(
+                "Skills — one per line or comma separated",
+                value="\n".join(candidate.get("skills", [])),
+                height=110,
+            ).replace(",", "\n").splitlines()
+            if x.strip()
+        ]
+
+    with st.expander("Professional experience", expanded=True):
+        experiences = list(candidate.get("experience") or [])
+        while len(experiences) < 3:
+            experiences.append({})
+        edited_experience = []
+
+        for idx in range(3):
+            exp = experiences[idx] or {}
+            with st.container(border=True):
+                st.markdown(f"**Experience {idx + 1}**")
+                c1, c2 = st.columns(2)
+                company = c1.text_input(
+                    "Company",
+                    value=exp.get("company", ""),
+                    key=f"exp_company_{idx}",
+                )
+                title = c2.text_input(
+                    "Job title",
+                    value=exp.get("title", ""),
+                    key=f"exp_title_{idx}",
+                )
+                c1, c2, c3 = st.columns(3)
+                start = c1.text_input(
+                    "Start",
+                    value=exp.get("start_date", ""),
+                    key=f"exp_start_{idx}",
+                )
+                end = c2.text_input(
+                    "End",
+                    value=exp.get("end_date", ""),
+                    key=f"exp_end_{idx}",
+                )
+                location = c3.text_input(
+                    "Location",
+                    value=exp.get("location", ""),
+                    key=f"exp_location_{idx}",
+                )
+                bullets = st.text_area(
+                    "Achievements / responsibilities — one per line",
+                    value="\n".join(exp.get("bullets", [])),
+                    key=f"exp_bullets_{idx}",
+                    height=110,
+                )
+                if company or title or bullets.strip():
+                    edited_experience.append({
+                        "company": company,
+                        "title": title,
+                        "location": location,
+                        "start_date": start,
+                        "end_date": end,
+                        "bullets": [x.strip(" -") for x in bullets.splitlines() if x.strip()],
+                    })
+        candidate["experience"] = edited_experience
+
+    with st.expander("Projects", expanded=True):
+        projects = list(candidate.get("projects") or [])
+        while len(projects) < 4:
+            projects.append({})
+        edited_projects = []
+
+        for idx in range(4):
+            project = projects[idx] or {}
+            with st.container(border=True):
+                st.markdown(f"**Project {idx + 1}**")
+                name = st.text_input(
+                    "Project name",
+                    value=project.get("name", ""),
+                    key=f"manual_project_name_{idx}",
+                )
+                technologies = st.text_input(
+                    "Technologies",
+                    value=", ".join(project.get("technologies", [])),
+                    key=f"manual_project_tech_{idx}",
+                )
+                c1, c2 = st.columns(2)
+                github = c1.text_input(
+                    "GitHub repository",
+                    value=next(
+                        (
+                            x.get("url", "")
+                            for x in project.get("links", [])
+                            if x.get("label") == "GitHub"
+                        ),
+                        "",
+                    ),
+                    key=f"manual_project_github_{idx}",
+                )
+                demo = c2.text_input(
+                    "Live demo / project link",
+                    value=next(
+                        (
+                            x.get("url", "")
+                            for x in project.get("links", [])
+                            if x.get("label") in {"Live Demo", "Project"}
+                        ),
+                        "",
+                    ),
+                    key=f"manual_project_demo_{idx}",
+                )
+                bullets = st.text_area(
+                    "Project contributions — one per line",
+                    value="\n".join(project.get("bullets", [])),
+                    key=f"manual_project_bullets_{idx}",
+                    height=100,
+                )
+
+                if name or bullets.strip() or github.strip() or demo.strip():
+                    links = []
+                    if github.strip():
+                        links.append({"label": "GitHub", "url": _normalise_url(github)})
+                    if demo.strip():
+                        links.append({"label": "Live Demo", "url": _normalise_url(demo)})
+                    edited_projects.append({
+                        "name": name,
+                        "technologies": [x.strip() for x in technologies.split(",") if x.strip()],
+                        "bullets": [x.strip(" -") for x in bullets.splitlines() if x.strip()],
+                        "links": links,
+                        "url": links[0]["url"] if links else "",
+                    })
+        candidate["projects"] = edited_projects
+
+    with st.expander("Education", expanded=True):
+        educations = list(candidate.get("education") or [])
+        while len(educations) < 2:
+            educations.append({})
+        edited_education = []
+        for idx in range(2):
+            edu = educations[idx] or {}
+            c1, c2 = st.columns(2)
+            institution = c1.text_input(
+                f"Institution {idx + 1}",
+                value=edu.get("institution", ""),
+                key=f"edu_inst_{idx}",
+            )
+            degree = c2.text_input(
+                "Degree",
+                value=edu.get("degree", ""),
+                key=f"edu_degree_{idx}",
+            )
+            c1, c2, c3 = st.columns(3)
+            field = c1.text_input(
+                "Field",
+                value=edu.get("field", ""),
+                key=f"edu_field_{idx}",
+            )
+            start = c2.text_input(
+                "Start",
+                value=edu.get("start_date", ""),
+                key=f"edu_start_{idx}",
+            )
+            end = c3.text_input(
+                "End",
+                value=edu.get("end_date", ""),
+                key=f"edu_end_{idx}",
+            )
+            if institution or degree or field:
+                edited_education.append({
+                    "institution": institution,
+                    "degree": degree,
+                    "field": field,
+                    "location": edu.get("location", ""),
+                    "start_date": start,
+                    "end_date": end,
+                })
+        candidate["education"] = edited_education
+
+    with st.expander("Certifications"):
+        candidate["certifications"] = [
+            x.strip()
+            for x in st.text_area(
+                "One certification per line",
+                value="\n".join(candidate.get("certifications", [])),
+                height=90,
+            ).splitlines()
+            if x.strip()
+        ]
+
+    candidate["github_repositories"] = st.session_state.github_repos
+    return candidate
+
+
+def inspect_github_repositories():
+    st.subheader("GitHub project inspection")
+    st.caption(
+        "Enter public GitHub repository URLs, one per line. CVForge inspects repository metadata, "
+        "README, languages, selected project files, and technologies. Private repositories are not accessed."
+    )
+    raw = st.text_area(
+        "Public GitHub repositories",
+        value="\n".join(x.get("url", "") for x in st.session_state.github_repos),
+        placeholder="https://github.com/owner/project-one\nhttps://github.com/owner/project-two",
+        height=100,
+        key="github_repo_input",
+    )
+
+    if st.button("Inspect public repositories"):
+        urls = [x.strip() for x in raw.splitlines() if x.strip()]
+        inspected = []
+        for url in urls:
+            try:
+                with st.spinner(f"Inspecting {url}..."):
+                    data = post(
+                        "/api/v1/github/inspect",
+                        st.session_state.token,
+                        json={"url": url},
+                    )
+                inspected.append(data)
+                st.success(
+                    f"Inspected {data.get('full_name', url)} — "
+                    f"{len(data.get('technologies', []))} technologies detected."
+                )
+            except APIError as exc:
+                st.error(f"{url}: {exc}")
+        st.session_state.github_repos = inspected
+
+    if st.session_state.github_repos:
+        for repo in st.session_state.github_repos:
+            with st.container(border=True):
+                st.markdown(
+                    f"**{repo.get('full_name', repo.get('name', 'Repository'))}**"
+                )
+                if repo.get("description"):
+                    st.write(repo["description"])
+                st.caption(
+                    " | ".join(
+                        x
+                        for x in (
+                            repo.get("language"),
+                            ", ".join(repo.get("technologies", [])),
+                            repo.get("default_branch"),
+                        )
+                        if x
+                    )
+                )
+                if repo.get("readme"):
+                    with st.expander("Repository evidence"):
+                        st.text(repo["readme"][:4000])
+
 def new_application():
-    st.header('New application')
-    st.write('Upload your existing CV and paste the target job description. CVForge analyzes both before generation.')
-    jd=st.text_area('Job description',height=320,placeholder='Paste the complete job description here...')
-    cv=st.file_uploader('Existing CV (optional)',type=['pdf','docx','txt','md'])
-    if st.button('Analyze JD + CV',type='primary',disabled=not jd.strip()):
+    st.header("CV Enhance")
+    st.write(
+        "Paste the target JD, optionally upload your existing CV, complete the missing information, "
+        "and let CVForge use verified public GitHub project evidence."
+    )
+
+    mode = st.radio(
+        "CV workflow",
+        ["Enhance existing CV", "Build CV from scratch"],
+        horizontal=True,
+    )
+
+    jd = st.text_area(
+        "Target job description",
+        height=280,
+        placeholder="Paste the complete job description here...",
+    )
+
+    cv = st.file_uploader(
+        "Upload existing CV (optional)",
+        type=["pdf", "docx", "txt", "md"],
+        help="Upload your current CV when you have one. You can still edit every extracted field below.",
+    )
+
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        analyze = st.button(
+            "Analyze JD + CV",
+            type="primary",
+            disabled=not jd.strip(),
+            use_container_width=True,
+        )
+    with c2:
+        if mode == "Build CV from scratch":
+            st.caption("No upload is required. Complete the CV fields after analysis.")
+
+    if analyze:
         try:
-            files={'cv':(cv.name,cv.getvalue())} if cv else None
-            data={'jd':jd}
-            st.session_state.analysis=request('POST','/api/v1/jobs/analyze',token=st.session_state.token,data=data,files=files).json()
-            st.session_state.application=None; st.session_state.resume=None
-        except APIError as e: st.error(str(e))
-    a=st.session_state.analysis
-    if not a: return
-    job=a['job']; candidate=a['candidate']
-    st.divider(); st.subheader('Job intelligence')
-    c1,c2,c3,c4=st.columns(4)
-    c1.metric('Role',job.get('role_family','general').replace('_',' ').title())
-    c2.metric('Seniority',job.get('seniority','entry').title())
-    c3.metric('Domain',job.get('domain','general').title())
-    c4.metric('Required skills',len(job.get('must_have_skills',[])))
-    if job.get('must_have_skills'):
-        st.write(' '.join(f"`{x}`" for x in job['must_have_skills']))
-    with st.expander('Extracted candidate evidence',expanded=True):
-        st.json(candidate)
-    questions=a.get('questions',[])
-    answers={}
+            files = {"cv": (cv.name, cv.getvalue())} if cv else None
+            data = {"jd": jd}
+            result = request(
+                "POST",
+                "/api/v1/jobs/analyze",
+                token=st.session_state.token,
+                data=data,
+                files=files,
+            ).json()
+            st.session_state.analysis = result
+            st.session_state.application = None
+            st.session_state.resume = None
+            st.session_state.github_repos = []
+        except APIError as exc:
+            st.error(str(exc))
+
+    analysis = st.session_state.analysis
+    if not analysis:
+        return
+
+    job = analysis["job"]
+    candidate = _candidate_editor(analysis["candidate"])
+
+    st.divider()
+    st.subheader("Job intelligence")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Role", job.get("role_family", "general").replace("_", " ").title())
+    c2.metric("Seniority", job.get("seniority", "entry").title())
+    c3.metric("Domain", job.get("domain", "general").title())
+    c4.metric("Required skills", len(job.get("must_have_skills", [])))
+
+    if job.get("must_have_skills"):
+        st.write(" ".join(f"`{x}`" for x in job["must_have_skills"]))
+
+    inspect_github_repositories()
+
+    questions = analysis.get("questions", [])
+    answers = {}
     if questions:
-        st.subheader('Evidence questions')
-        st.caption('Answer only what is true. These answers become additional evidence for generation.')
+        st.subheader("Evidence questions")
+        st.caption(
+            "Answer only what is true. These answers become additional evidence for generation."
+        )
         for q in questions:
-            answers[q['key']]=st.text_area(q['question'],help=q.get('reason',''),key='q_'+q['key'])
+            answers[q["key"]] = st.text_area(
+                q["question"],
+                help=q.get("reason", ""),
+                key="q_" + q["key"],
+            )
 
     link_answers = collect_link_evidence(candidate)
     answers.update(link_answers)
 
-    if st.button('Create application and generate CV',type='primary'):
+    candidate["github_repositories"] = st.session_state.github_repos
+
+    if st.button("Create application and generate CV", type="primary", use_container_width=True):
         try:
-            payload={'job':job,'candidate':candidate}
-            created=post('/api/v1/jobs/applications',st.session_state.token,json=payload)
-            st.session_state.application=created
-            with st.spinner('Groq is tailoring your resume, preserving evidence, and running ATS validation...'):
-                result=post(f"/api/v1/jobs/applications/{created['id']}/generate",st.session_state.token,json=answers)
-            st.session_state.resume=result
-            st.success('Resume generated successfully.')
-        except APIError as e: st.error(str(e))
+            payload = {"job": job, "candidate": candidate}
+            created = post(
+                "/api/v1/jobs/applications",
+                st.session_state.token,
+                json=payload,
+            )
+            st.session_state.application = created
+
+            with st.spinner(
+                "Inspecting evidence, tailoring the CV with Groq, and running ATS validation..."
+            ):
+                result = post(
+                    f"/api/v1/jobs/applications/{created['id']}/generate",
+                    st.session_state.token,
+                    json=answers,
+                )
+
+            st.session_state.resume = result
+            st.success("CV generated successfully.")
+        except APIError as exc:
+            st.error(str(exc))
+
     if st.session_state.resume:
         render_resume(st.session_state.resume)
-
 
 def render_resume(result):
     resume=result.get('resume',{}); ats=result.get('ats',{})
@@ -374,6 +752,6 @@ with st.sidebar:
     if st.button('Sign out'): logout(); st.rerun()
 
 if page=='Overview': dashboard()
-elif page=='New Application': new_application()
+elif page=='CV Enhance': new_application()
 elif page=='Applications': applications()
 elif page=='Profiles': profiles()
