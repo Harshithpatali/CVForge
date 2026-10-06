@@ -10,10 +10,11 @@ from app.api.profiles import router as profiles_router
 from app.api.applications import router as applications_router
 from app.api.editor import router as editor_router
 from app.api.github import router as github_router
+from app.api.ai import router as ai_router
 
 app=FastAPI(title='CVForge API',version='3.0.0',description='Evidence-first resume tailoring API')
 app.add_middleware(CORSMiddleware,allow_origins=settings.cors_list,allow_credentials=settings.cors_origins.strip() != '*',allow_methods=['*'],allow_headers=['*'])
-for r in [auth_router,profiles_router,applications_router,jobs_router,editor_router,legacy_resumes_router,github_router]: app.include_router(r)
+for r in [auth_router,profiles_router,applications_router,jobs_router,editor_router,legacy_resumes_router,github_router,ai_router]: app.include_router(r)
 
 @app.get('/')
 def root():
