@@ -23,6 +23,17 @@ Neon PostgreSQL
 
 The current deployment uses one synchronous FastAPI service. This is appropriate for a Render Free portfolio deployment. Generation is isolated in `generation_service.py`. `llm.py` separates the two model responsibilities: Groq generates the CV, and Gemini evaluates the generated CV against the user's job description.
 
+## CV input and ATS project planning
+
+CVForge accepts an existing CV in two ways during job analysis:
+
+- upload a PDF, DOCX, TXT, or Markdown file
+- paste the CV text directly
+
+When both are supplied, the pasted CV takes precedence so the candidate evidence stays deterministic.
+
+After Groq generates the tailored CV, Gemini independently evaluates the exact CV against the job description. In addition to ATS scoring, Gemini can identify important capability gaps and propose up to three portfolio project ideas. Each suggestion is stored with its rationale, skills to demonstrate, project scope, implementation plan, and the resume signal the completed project could provide. Suggested projects are explicitly treated as future work and are never added to the candidate's current experience or projects automatically.
+
 ## Evidence-first pipeline
 
 1. Parse the CV into structured candidate evidence.
