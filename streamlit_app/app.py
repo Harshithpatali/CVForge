@@ -100,7 +100,7 @@ def collect_link_evidence(candidate: dict) -> dict:
             key="link_portfolio",
         )
         github = c3.text_input(
-            "GitHub URL",
+            "GitHub profile",
             value=contact.get("github", ""),
             placeholder="https://github.com/username",
             key="link_github",
@@ -125,17 +125,38 @@ def collect_link_evidence(candidate: dict) -> dict:
                 value=project.get("name", "") or f"Project {idx + 1}",
                 key=f"project_name_{idx}",
             )
+            project_links = project.get("links") or []
+            github_default = next(
+                (
+                    x.get("url", "")
+                    for x in project_links
+                    if x.get("label") == "GitHub"
+                ),
+                "",
+            )
+            demo_default = next(
+                (
+                    x.get("url", "")
+                    for x in project_links
+                    if x.get("label") in {"Live Demo", "Project"}
+                ),
+                "",
+            )
+
             c1, c2 = st.columns(2)
             github_url = c1.text_input(
                 "GitHub",
+                value=github_default,
                 placeholder="https://github.com/...",
                 key=f"project_github_url_{idx}",
             )
             demo_url = c2.text_input(
                 "Live Demo / Portfolio",
+                value=demo_default,
                 placeholder="https://...",
                 key=f"project_demo_url_{idx}",
             )
+
             if name.strip():
                 answers[f"project_name_{idx}"] = name.strip()
             if github_url.strip():
@@ -170,8 +191,6 @@ def collect_link_evidence(candidate: dict) -> dict:
 
     st.session_state.link_answers = answers
     return answers
-
-
 
 def _candidate_editor(candidate: dict) -> dict:
     candidate = copy.deepcopy(candidate or {})
