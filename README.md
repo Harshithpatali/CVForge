@@ -136,6 +136,35 @@ Secret:
 CVFORGE_API_URL = "https://<your-render-backend>.onrender.com"
 ```
 
+## Streamlit Community Cloud
+
+Use the repository root as the Streamlit app working directory.
+
+**Main file:** `app.py`
+
+The root `app.py` is a stable entrypoint that imports the production UI from
+`streamlit_app/app.py`. Configure Streamlit Community Cloud to run this root
+file rather than an older nested entrypoint.
+
+The sidebar for the current production build is:
+
+```text
+Dashboard
+CV Studio
+Applications
+Profiles
+```
+
+The current UI build fingerprint shown in the sidebar is:
+
+```text
+studio-ui-2026.10.06
+```
+
+After changing the Main file in Streamlit Community Cloud, use **Reboot app**
+or redeploy so the new entrypoint is loaded.
+
+
 ## Security
 
 - Never commit API keys or database passwords.
