@@ -1,6 +1,8 @@
 import json
+import random
+import time
 
-from google import genai
+from google import genai, errors
 from google.genai import types
 from openai import OpenAI
 
@@ -210,11 +212,78 @@ def generate_resume(prompt: str) -> dict:
     return _generate_with_groq(prompt)
 
 
+def _gemini_models() -> list[str]:
+    models = [settings.gemini_model.strip()]
+    models.extend(
+        model.strip()
+        for model in settings.gemini_fallback_models.split(",")
+        if model.strip()
+    )
+    # Preserve order while removing duplicates.
+    return list(dict.fromkeys(model for model in models if model))
+
+
+def _is_transient_gemini_error(exc: Exception) -> bool:
+    code = getattr(exc, "code", None)
+    if code in {408, 429, 500, 502, 503, 504}:
+        return True
+
+    message = str(exc).lower()
+    return any(
+        token in message
+        for token in (
+            "503",
+            "service unavailable",
+            "unavailable",
+            "high demand",
+            "temporarily overloaded",
+            "429",
+            "resource exhausted",
+            "rate limit",
+        )
+    )
+
+
+def _gemini_client() -> genai.Client:
+    retry_options = types.HttpRetryOptions(
+        attempts=max(1, int(settings.gemini_retry_attempts)),
+        initial_delay=1.0,
+        max_delay=4.0,
+        exp_base=2.0,
+        jitter=1.0,
+        http_status_codes=[408, 429, 500, 502, 503, 504],
+    )
+    return genai.Client(
+        api_key=settings.gemini_api_key,
+        http_options=types.HttpOptions(retry_options=retry_options),
+    )
+
+
+def _evaluate_ats_with_model(
+    client: genai.Client,
+    model: str,
+    prompt: str,
+) -> dict:
+    response = client.models.generate_content(
+        model=model,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=ATS_SYSTEM_PROMPT,
+            response_mime_type="application/json",
+            response_json_schema=ATS_JSON_SCHEMA,
+            max_output_tokens=4000,
+        ),
+    )
+    return _extract_json(
+        getattr(response, "text", "") or "",
+        f"Gemini ATS evaluator ({model})",
+    )
+
+
 def evaluate_ats(job: dict, resume: dict) -> dict:
     if not settings.gemini_api_key:
         raise RuntimeError("GEMINI_API_KEY is not configured.")
 
-    client = genai.Client(api_key=settings.gemini_api_key)
     prompt = (
         "JOB DESCRIPTION AND PARSED JOB SIGNALS:\n"
         f"{json.dumps(job, ensure_ascii=False)}\n\n"
@@ -226,14 +295,29 @@ def evaluate_ats(job: dict, resume: dict) -> dict:
         "and explain the highest-impact gaps. Do not invent candidate experience."
     )
 
-    response = client.models.generate_content(
-        model=settings.gemini_model,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=ATS_SYSTEM_PROMPT,
-            response_mime_type="application/json",
-            response_json_schema=ATS_JSON_SCHEMA,
-            max_output_tokens=4000,
-        ),
+    client = _gemini_client()
+    models = _gemini_models()
+    failures: list[str] = []
+
+    for index, model in enumerate(models):
+        try:
+            return _evaluate_ats_with_model(client, model, prompt)
+        except errors.APIError as exc:
+            failures.append(f"{model}: {exc.code} {exc.message}")
+            if not _is_transient_gemini_error(exc):
+                raise
+        except Exception as exc:
+            failures.append(f"{model}: {exc}")
+            if not _is_transient_gemini_error(exc):
+                raise
+
+        # Add a very short jittered delay before changing models. The SDK
+        # already performs its own retry/backoff for transient responses.
+        if index < len(models) - 1:
+            time.sleep(0.5 + random.random() * 0.5)
+
+    raise RuntimeError(
+        "Gemini ATS evaluation is temporarily unavailable across all configured "
+        f"models. Tried: {', '.join(models)}. "
+        + " | ".join(failures)[:1800]
     )
-    return _extract_json(getattr(response, "text", "") or "", "Gemini ATS evaluator")
