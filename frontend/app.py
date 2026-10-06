@@ -1411,12 +1411,36 @@ def new_application() -> None:
                 help="Use the full posting whenever possible.",
             )
 
-            cv = st.file_uploader(
-                "Existing CV (optional)",
-                type=["pdf", "docx", "txt", "md"],
-                key=f"cv_upload_{st.session_state.form_seq}",
-                help="Uploaded CV content becomes editable candidate evidence.",
+            st.markdown("#### Existing CV <span class='cvf-muted'>(optional)</span>", unsafe_allow_html=True)
+            st.caption(
+                "Upload your CV or paste its text directly. If both are provided, the pasted text takes precedence."
             )
+
+            upload_tab, paste_tab = st.tabs(["Upload file", "Paste CV"])
+            with upload_tab:
+                cv = st.file_uploader(
+                    "Upload CV",
+                    type=["pdf", "docx", "txt", "md"],
+                    key=f"cv_upload_{st.session_state.form_seq}",
+                    help="PDF, DOCX, TXT or Markdown.",
+                    label_visibility="collapsed",
+                )
+                if cv is not None:
+                    st.caption(f"{cv.name} · {cv.size / 1024:.0f} KB")
+
+            with paste_tab:
+                cv_text = st.text_area(
+                    "Paste CV text",
+                    key=f"cv_text_{st.session_state.form_seq}",
+                    height=230,
+                    placeholder=(
+                        "Paste the full text of your current CV here…\n\n"
+                        "You can copy directly from Word, Google Docs, LinkedIn or a PDF."
+                    ),
+                    label_visibility="collapsed",
+                )
+                if cv_text.strip():
+                    st.caption(f"{len(cv_text.split()):,} words · {len(cv_text):,} characters")
 
             # Form inputs are committed when the form is submitted.
             # Keep the submit button enabled and validate the JD after submission.
@@ -1479,7 +1503,10 @@ def new_application() -> None:
                             "POST",
                             "/api/v1/jobs/analyze",
                             token=st.session_state.token,
-                            data={"jd": jd},
+                            data={
+                                "jd": jd,
+                                "cv_text": (cv_text or "").strip(),
+                            },
                             files=files,
                         )
                         result = response.json()
@@ -1822,6 +1849,66 @@ def render_resume(result: Dict[str, Any]) -> None:
             with st.expander("Highest-impact recommendations", expanded=True):
                 for item in recommendations:
                     st.markdown(f"- {esc(item)}")
+
+        project_suggestions = ats.get("project_suggestions") or []
+        if project_suggestions:
+            with st.container(border=True):
+                st.markdown("#### Project opportunities")
+                st.caption(
+                    "Gemini identified portfolio projects that could close important JD gaps. "
+                    "These are future-project ideas, not claims to add to the current CV."
+                )
+
+                for idx, suggestion in enumerate(project_suggestions[:3], start=1):
+                    title = str(suggestion.get("title") or f"Project {idx}")
+                    priority = str(suggestion.get("priority") or "Medium")
+                    tone = (
+                        "danger" if priority == "High"
+                        else "warning" if priority == "Medium"
+                        else "muted"
+                    )
+
+                    with st.expander(
+                        f"{idx}. {title} · {priority}",
+                        expanded=priority == "High",
+                    ):
+                        st.markdown(
+                            chips([priority], tone=tone),
+                            unsafe_allow_html=True,
+                        )
+
+                        why = suggestion.get("why_missing")
+                        if why:
+                            st.markdown("**Why this project?**")
+                            st.write(str(why))
+
+                        skills = suggestion.get("skills_to_demonstrate") or []
+                        if skills:
+                            st.markdown("**Skills to demonstrate**")
+                            st.markdown(
+                                chips(skills, tone="info"),
+                                unsafe_allow_html=True,
+                            )
+
+                        scope = suggestion.get("project_scope")
+                        if scope:
+                            st.markdown("**Project scope**")
+                            st.write(str(scope))
+
+                        plan = suggestion.get("plan") or []
+                        if plan:
+                            st.markdown("**Build plan**")
+                            for step_number, step in enumerate(plan, start=1):
+                                st.markdown(
+                                    f"{step_number}. {esc(step)}"
+                                )
+
+                        signal = suggestion.get("resume_signal")
+                        if signal:
+                            st.info(
+                                f"Resume signal after completion: {signal}",
+                                icon="✦",
+                            )
 
     for warning in ats.get("warnings") or []:
         st.warning(str(warning), icon="⚠️")
