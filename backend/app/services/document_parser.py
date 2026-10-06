@@ -86,6 +86,7 @@ def _clean_latex_markup(value: str) -> str:
     text = LATEX_EMPH_RE.sub(r"\1", text)
     text = re.sub(r"\\(?:textcolor|underline)\s*\{[^{}]*\}\s*\{([^{}]*)\}", r"\1", text)
     text = re.sub(r"\\(?:item|newline|linebreak)\b", "\n", text)
+    text = re.sub(r"\\(?:begin|end)\s*\{[^{}]+\}", "\n", text)
     text = text.replace("~", " ")
     text = re.sub(r"(?<!\\)%.*$", "", text)
     # Remove common TeX-only commands while preserving their arguments.
