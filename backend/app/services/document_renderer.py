@@ -142,7 +142,32 @@ def _layout_profile(page_target: int = 1, style: str = "reference") -> dict:
     if style not in {"reference", "compact"}:
         style = "reference"
 
-    if style == "compact" or page_target == 1:
+    if style == "compact":
+        return {
+            "right": 26,
+            "left": 26,
+            "top": 22,
+            "bottom": 24,
+            "title": 16,
+            "title_leading": 17.5,
+            "contact": 7.0,
+            "contact_leading": 8.1,
+            "headline": 9.1,
+            "headline_leading": 10.1,
+            "section": 9.1,
+            "section_leading": 9.7,
+            "body": 7.25,
+            "body_leading": 8.55,
+            "entry": 7.75,
+            "entry_leading": 8.85,
+            "small": 6.9,
+            "small_leading": 7.8,
+            "section_space": 4.0,
+            "bullet_space": 1.0,
+        }
+
+    if page_target == 1:
+        # Default one-page reference profile: close to the supplied CV image.
         return {
             "right": 30,
             "left": 30,
@@ -187,7 +212,7 @@ def _layout_profile(page_target: int = 1, style: str = "reference") -> dict:
         "small_leading": 9.6,
         "section_space": 6,
         "bullet_space": 2,
-    }
+    )
 
 
 def _render_pdf_once(
