@@ -10,6 +10,7 @@ from app.services.generation_service import generate_for_application
 from app.services.llm import GeminiATSUnavailableError
 from app.services.jd_parser import analyze_jd
 from app.services.questionnaire import missing_questions
+from app.services.ai_intelligence import ai_analyze_job, ai_extract_candidate
 
 
 router = APIRouter(prefix="/api/v1/jobs", tags=["jobs"])
@@ -43,7 +44,14 @@ async def analyze(
     else:
         candidate = parse_candidate("", "txt")
 
-    job = analyze_jd(jd)
+    # Deterministic extraction gives us a fast baseline; Gemini then enriches
+    # job/candidate structure when the configured fast model is available.
+    job = ai_analyze_job(jd, analyze_jd(jd))
+    candidate = ai_extract_candidate(
+        candidate.raw_text,
+        cv.filename if cv else "pasted-cv.txt",
+        candidate,
+    )
     questions = missing_questions(candidate, job)
 
     return {
