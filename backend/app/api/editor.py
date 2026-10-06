@@ -63,9 +63,13 @@ def update_resume(
             )
             candidate_data = profile.profile_json if profile else {}
 
-        CandidateProfile.model_validate(candidate_data or {})
+        candidate = CandidateProfile.model_validate(candidate_data or {})
 
-        ats = evaluate_ats(job.model_dump(), resume.model_dump())
+        ats = evaluate_ats(
+            job.model_dump(),
+            resume.model_dump(),
+            candidate.model_dump(exclude={"raw_text"}),
+        )
 
         new_artifact = ResumeArtifact(
             application_id=resume_artifact.application_id,
