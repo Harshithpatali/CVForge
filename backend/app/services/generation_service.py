@@ -370,6 +370,7 @@ def generate_for_application(
         ats = evaluate_ats(
             job.model_dump(),
             resume.model_dump(),
+            candidate.model_dump(exclude={"raw_text"}),
         )
 
         latest = (
