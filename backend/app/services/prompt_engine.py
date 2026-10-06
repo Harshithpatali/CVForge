@@ -89,7 +89,7 @@ def select_template(role_family: str, seniority: str, domain: str) -> PromptTemp
         role,
         senior,
         dom,
-        2,
+        3,
         instructions,
     )
 
@@ -174,5 +174,11 @@ Keep experience and projects concise with strong bullets.
 For projects, use the exact project names supplied by the candidate where possible
 and include GitHub / Live Demo links when provided.
 For skills, group evidence into useful categories rather than one giant comma-separated list.
+When github_repositories are present, use their README, language, technology,
+file-structure, and code evidence to strengthen project descriptions. Treat that
+repository evidence as candidate evidence, not as proof of employment or business
+impact. Do not claim implementation details that are not supported by the repository
+evidence.
+
 Never invent links, metrics, dates, employers, or credentials.
 """
