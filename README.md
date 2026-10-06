@@ -138,15 +138,19 @@ CVFORGE_API_URL = "https://<your-render-backend>.onrender.com"
 
 ## Streamlit Community Cloud
 
-Use the repository root as the Streamlit app working directory.
+The Streamlit frontend is isolated in the `frontend/` directory.
 
-**Main file:** `app.py`
+**Main file:** `frontend/app.py`
 
-The root `app.py` is a stable entrypoint that imports the production UI from
-`streamlit_app/app.py`. Configure Streamlit Community Cloud to run this root
-file rather than an older nested entrypoint.
+**Dependencies:** `frontend/requirements.txt`
 
-The sidebar for the current production build is:
+**Configuration:** `.streamlit/config.toml` at the repository root.
+
+This follows Streamlit Community Cloud's supported subdirectory layout: an
+entrypoint may live in a subdirectory, its dependency file may live beside it,
+and the single Streamlit configuration file stays at the repository root.
+
+The production sidebar is:
 
 ```text
 Dashboard
@@ -160,9 +164,6 @@ The current UI build fingerprint shown in the sidebar is:
 ```text
 studio-ui-2026.10.06
 ```
-
-After changing the Main file in Streamlit Community Cloud, use **Reboot app**
-or redeploy so the new entrypoint is loaded.
 
 
 ## Security
