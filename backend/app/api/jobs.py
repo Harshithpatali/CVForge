@@ -10,7 +10,7 @@ from app.schemas.cv import CandidateProfile, JobProfile
 from app.services.document_parser import extract_text, parse_candidate
 from app.services.generation_service import generate_for_application
 from app.services.llm import GeminiATSUnavailableError
-from app.services.jd_parser import analyze_jd
+from app.services.jd_parser import analyze_jd, normalize_job_title
 from app.services.questionnaire import missing_questions
 from app.services.ai_intelligence import ai_analyze_job, ai_extract_candidate
 
@@ -84,6 +84,9 @@ def create_application(
     ).first():
         raise HTTPException(404, "Profile not found")
 
+    safe_job_title = normalize_job_title(job.title, job.raw_text)[:255]
+    safe_company = " ".join((job.company or "").strip().split())[:255]
+
     application = Application(
         user_id=u.id,
         candidate_profile_id=candidate_profile_id,
@@ -92,8 +95,8 @@ def create_application(
             if candidate
             else None
         ),
-        job_title=job.title,
-        company=job.company,
+        job_title=safe_job_title,
+        company=safe_company,
         job_json=job.model_dump(),
         status="draft",
     )
