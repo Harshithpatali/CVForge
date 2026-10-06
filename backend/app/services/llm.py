@@ -2,7 +2,7 @@ import json
 import random
 import time
 
-from google import genai, errors
+from google import genai
 from google.genai import types
 from openai import OpenAI
 
@@ -374,12 +374,10 @@ def evaluate_ats(
     for index, model in enumerate(models):
         try:
             return _evaluate_ats_with_model(client, model, prompt)
-        except errors.APIError as exc:
-            failures.append(f"{model}: {exc.code} {exc.message}")
-            if not _is_transient_gemini_error(exc):
-                raise
         except Exception as exc:
-            failures.append(f"{model}: {exc}")
+            code = getattr(exc, "code", None)
+            message = getattr(exc, "message", None) or str(exc)
+            failures.append(f"{model}: {code or 'error'} {message}")
             if not _is_transient_gemini_error(exc):
                 raise
 
