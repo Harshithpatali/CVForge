@@ -881,7 +881,8 @@ def _candidate_editor(candidate: Dict[str, Any], seq: int) -> Dict[str, Any]:
             key=key("profile_section"),
             label_visibility="collapsed",
         )
-    st.session_state[f"c{seq}_profile_section"] = section
+    # Do not write to the widget's session-state key after the widget is
+    # instantiated. Streamlit reserves widget keys for the widget lifecycle.
 
     completeness_fields = [
         bool(candidate.get("contact", {}).get("name")),
