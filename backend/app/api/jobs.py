@@ -19,10 +19,24 @@ router = APIRouter(prefix="/api/v1/jobs", tags=["jobs"])
 async def analyze(
     jd: str = Form(...),
     cv: UploadFile | None = File(None),
+    cv_text: str = Form(""),
     u=Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    if cv:
+    pasted_cv = (cv_text or "").strip()
+
+    if len(pasted_cv) > 120_000:
+        raise HTTPException(
+            413,
+            "Pasted CV is too large. Keep it below 120,000 characters.",
+        )
+
+    # Pasted CV takes precedence when both sources are supplied. This keeps
+    # the candidate evidence deterministic and avoids accidentally merging
+    # duplicate versions of the same CV.
+    if pasted_cv:
+        candidate = parse_candidate(pasted_cv, "txt")
+    elif cv:
         data = await cv.read()
         text = extract_text(data, cv.filename or "")
         candidate = parse_candidate(text, cv.filename or "txt")
