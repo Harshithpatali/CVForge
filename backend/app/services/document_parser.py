@@ -71,6 +71,11 @@ def _normalise_url(url: str) -> str:
     return url
 
 
+def _is_github_profile_url(url: str) -> bool:
+    match = re.search(r"github\.com/([^/?#]+)/?([^/?#]*)", str(url or "").lower())
+    return bool(match and not match.group(2))
+
+
 def _clean_latex_markup(value: str) -> str:
     text = str(value or "")
     # Resolve the most useful structural commands first.
@@ -338,7 +343,14 @@ def parse_candidate(text: str, filename: str) -> CandidateProfile:
     all_links = _extract_links(text)
 
     linkedin = next((link.url for link in all_links if link.label == "LinkedIn"), "")
-    github = next((link.url for link in all_links if link.label == "GitHub" and "github.com/" in link.url.lower()), "")
+    github = next(
+        (
+            link.url
+            for link in all_links
+            if link.label == "GitHub" and _is_github_profile_url(link.url)
+        ),
+        "",
+    )
     portfolio = next(
         (
             link.url
@@ -426,11 +438,7 @@ def parse_candidate(text: str, filename: str) -> CandidateProfile:
     candidate_github = github
     if not candidate_github:
         for link in project_links:
-            match = re.search(
-                r"github\.com/([^/?#]+)/?([^/?#]*)",
-                link.url.lower(),
-            )
-            if match and not match.group(2):
+            if _is_github_profile_url(link.url):
                 candidate_github = link.url
                 break
 
