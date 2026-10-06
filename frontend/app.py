@@ -692,12 +692,23 @@ def _parallel_workspace_load() -> Tuple[List[Any], List[Any]]:
 # Cached downloads
 # --------------------------------------------------------------------------- #
 
-@st.cache_data(show_spinner=False, ttl=600, max_entries=32)
-def _cached_download(resume_id: int, fmt: str, version: Any, token: str) -> bytes:
+@st.cache_data(show_spinner=False, ttl=600, max_entries=64)
+def _cached_download(
+    resume_id: int,
+    fmt: str,
+    version: Any,
+    token: str,
+    page_target: int = 1,
+    layout_style: str = "reference",
+) -> bytes:
     return download(
         f"/api/v1/resumes/{resume_id}/download",
         token,
-        params={"format": fmt},
+        params={
+            "format": fmt,
+            "pages": page_target,
+            "style": layout_style,
+        },
     )
 
 
@@ -1633,6 +1644,29 @@ def new_application() -> None:
 
         answers_local.update(collect_link_evidence(candidate, seq))
 
+        st.markdown("#### CV format")
+        format_left, format_mid = st.columns(2)
+        with format_left:
+            requested_pages = st.radio(
+                "Target length",
+                [1, 2],
+                horizontal=True,
+                format_func=lambda value: f"{value} page" if value == 1 else "2 pages",
+                key=f"requested_pages_{seq}",
+            )
+        with format_mid:
+            requested_style = st.selectbox(
+                "Layout density",
+                ["reference", "compact"],
+                format_func=lambda value: (
+                    "Reference format" if value == "reference" else "Compact ATS"
+                ),
+                key=f"requested_style_{seq}",
+            )
+
+        answers_local["_page_target"] = str(requested_pages)
+        answers_local["_layout_style"] = requested_style
+
         save_evidence, generate_cv = st.columns([1, 1])
 
         with save_evidence:
@@ -1730,6 +1764,41 @@ def render_resume(result: Dict[str, Any]) -> None:
 
     st.markdown('<hr class="cvf-divider"/>', unsafe_allow_html=True)
 
+    saved_options = resume.get("_render_options") or {}
+    default_pages = 2 if int(saved_options.get("page_target", 1) or 1) == 2 else 1
+    default_style = (
+        str(saved_options.get("style") or "reference").strip().lower()
+        if saved_options
+        else "reference"
+    )
+    if default_style not in {"reference", "compact"}:
+        default_style = "reference"
+
+    controls_left, controls_mid, controls_right = st.columns([1, 1, 1.4], gap="small")
+    with controls_left:
+        selected_pages = st.selectbox(
+            "CV length",
+            [1, 2],
+            index=0 if default_pages == 1 else 1,
+            format_func=lambda value: f"{value} page" if value == 1 else "2 pages",
+            key=f"layout_pages_{resume_id}_{version}",
+        )
+    with controls_mid:
+        selected_style = st.selectbox(
+            "Layout",
+            ["reference", "compact"],
+            index=0 if default_style == "reference" else 1,
+            format_func=lambda value: (
+                "Reference format" if value == "reference" else "Compact ATS"
+            ),
+            key=f"layout_style_{resume_id}_{version}",
+        )
+    with controls_right:
+        st.caption(
+            "Change the page count or density without regenerating the CV. "
+            "Groq/Gemini are not called when you change this."
+        )
+
     head_left, head_right = st.columns([3, 2])
     with head_left:
         page_header(
@@ -1746,7 +1815,12 @@ def render_resume(result: Dict[str, Any]) -> None:
             ):
                 try:
                     payload = _cached_download(
-                        int(resume_id), fmt, version, str(st.session_state.token or "")
+                        int(resume_id),
+                        fmt,
+                        version,
+                        str(st.session_state.token or ""),
+                        page_target=selected_pages,
+                        layout_style=selected_style,
                     )
                     column.download_button(
                         label,
