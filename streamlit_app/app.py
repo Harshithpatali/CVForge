@@ -1869,79 +1869,97 @@ def render_resume(result: Dict[str, Any]) -> None:
     # ----- Editing -------------------------------------------------------- #
     with st.expander("Edit resume and save a new revision"):
         st.info(
-            "Saving an edited revision will run Gemini ATS evaluation again, so the score stays aligned with the exact CV version you save.",
+            "Edits are form-batched. Saving the revision re-runs Gemini ATS evaluation on the exact CV you saved.",
             icon="✦",
         )
+
         edited = copy.deepcopy(resume)
 
-        edited["contact_line"] = st.text_input(
-            "Contact line",
-            value=resume.get("contact_line", ""),
-            key=f"edit_contact_{resume_id}_{version}",
-        )
-        edited["headline"] = st.text_input(
-            "Headline",
-            value=resume.get("headline", ""),
-            key=f"edit_headline_{resume_id}_{version}",
-        )
-        edited["summary"] = st.text_area(
-            "Summary",
-            value=resume.get("summary", ""),
-            height=160,
-            key=f"edit_summary_{resume_id}_{version}",
-        )
-        edited["skills"] = [
-            item.strip()
-            for item in st.text_input(
-                "Skills (comma separated)",
-                value=", ".join(resume.get("skills", []) or []),
-                key=f"edit_skills_{resume_id}_{version}",
-            ).split(",")
-            if item.strip()
-        ]
+        with st.form(f"resume_edit_form_{resume_id}_{version}", clear_on_submit=False, border=False):
+            edited["contact_line"] = st.text_input(
+                "Contact line",
+                value=resume.get("contact_line", ""),
+                key=f"edit_contact_{resume_id}_{version}",
+            )
+            edited["headline"] = st.text_input(
+                "Headline",
+                value=resume.get("headline", ""),
+                key=f"edit_headline_{resume_id}_{version}",
+            )
+            edited["summary"] = st.text_area(
+                "Summary",
+                value=resume.get("summary", ""),
+                height=150,
+                key=f"edit_summary_{resume_id}_{version}",
+            )
+            edited["skills"] = [
+                item.strip()
+                for item in st.text_input(
+                    "Skills (comma separated)",
+                    value=", ".join(resume.get("skills", []) or []),
+                    key=f"edit_skills_{resume_id}_{version}",
+                ).split(",")
+                if item.strip()
+            ]
 
-        if edited.get("projects"):
-            st.caption("Project links")
-            for idx, project in enumerate(edited["projects"]):
-                links = project.get("links") or []
-                github_default = next(
-                    (l.get("url", "") for l in links if l.get("label") == "GitHub"), ""
-                )
-                demo_default = next(
-                    (l.get("url", "") for l in links if l.get("label") in {"Live Demo", "Project"}),
-                    "",
-                )
-                c1, c2 = st.columns(2)
-                github = c1.text_input(
-                    f"{project.get('name', 'Project')} — GitHub",
-                    value=github_default,
-                    key=f"edit_proj_github_{resume_id}_{version}_{idx}",
-                )
-                demo = c2.text_input(
-                    f"{project.get('name', 'Project')} — Live Demo",
-                    value=demo_default,
-                    key=f"edit_proj_demo_{resume_id}_{version}_{idx}",
-                )
+            if edited.get("projects"):
+                st.markdown("**Project links**")
+                for idx, project in enumerate(edited["projects"]):
+                    links = project.get("links") or []
+                    github_default = next(
+                        (l.get("url", "") for l in links if l.get("label") == "GitHub"),
+                        "",
+                    )
+                    demo_default = next(
+                        (
+                            l.get("url", "")
+                            for l in links
+                            if l.get("label") in {"Live Demo", "Project"}
+                        ),
+                        "",
+                    )
+                    c1, c2 = st.columns(2)
+                    github = c1.text_input(
+                        f"{project.get('name', 'Project')} — GitHub",
+                        value=github_default,
+                        key=f"edit_proj_github_{resume_id}_{version}_{idx}",
+                    )
+                    demo = c2.text_input(
+                        f"{project.get('name', 'Project')} — Live Demo",
+                        value=demo_default,
+                        key=f"edit_proj_demo_{resume_id}_{version}_{idx}",
+                    )
+                    rebuilt: List[Dict[str, str]] = []
+                    if github.strip():
+                        rebuilt.append({"label": "GitHub", "url": normalise_url(github)})
+                    if demo.strip():
+                        rebuilt.append({"label": "Live Demo", "url": normalise_url(demo)})
+                    edited["projects"][idx]["links"] = rebuilt
+                    edited["projects"][idx]["url"] = rebuilt[0]["url"] if rebuilt else ""
 
-                rebuilt: List[Dict[str, str]] = []
-                if github.strip():
-                    rebuilt.append({"label": "GitHub", "url": normalise_url(github)})
-                if demo.strip():
-                    rebuilt.append({"label": "Live Demo", "url": normalise_url(demo)})
-                edited["projects"][idx]["links"] = rebuilt
-                edited["projects"][idx]["url"] = rebuilt[0]["url"] if rebuilt else ""
+            save_revision = st.form_submit_button(
+                "Save new revision and re-check ATS",
+                type="primary",
+                **FW,
+            )
 
-        if st.button("Save new revision", key=f"save_revision_{resume_id}_{version}"):
+        if save_revision:
             if not resume_id:
                 st.error("This resume has no saved identifier yet.", icon="🚫")
             else:
                 try:
-                    with st.spinner("Saving revision…"):
+                    with st.status("Re-evaluating your edited CV…", expanded=True) as status:
+                        status.write("Saving the new resume revision")
                         saved = put(
                             f"/api/v1/resumes/{resume_id}",
                             st.session_state.token,
                             json={"resume": edited},
                         )
+                        status.update(
+                            label=f"Revision saved · Gemini ATS score {float((saved.get('ats') or {}).get('score', 0) or 0):.1f}/100",
+                            state="complete",
+                        )
+
                     _cached_download.clear()
                     st.session_state.resume = {
                         **result,
@@ -1950,10 +1968,12 @@ def render_resume(result: Dict[str, Any]) -> None:
                         "resume": saved.get("resume", edited),
                         "ats": saved.get("ats", ats),
                     }
+                    _invalidate_api_cache("applications")
                     flash("success", f"Saved revision v{saved.get('version', '?')}.")
                     st.rerun()
                 except APIError as exc:
                     show_error(exc)
+
 
 
 # --------------------------------------------------------------------------- #
