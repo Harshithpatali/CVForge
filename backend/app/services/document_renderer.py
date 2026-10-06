@@ -212,7 +212,7 @@ def _layout_profile(page_target: int = 1, style: str = "reference") -> dict:
         "small_leading": 9.6,
         "section_space": 6,
         "bullet_space": 2,
-    )
+    }
 
 
 def _render_pdf_once(
