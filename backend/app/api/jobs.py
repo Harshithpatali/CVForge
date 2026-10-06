@@ -7,6 +7,7 @@ from app.models.entities import Application, CandidateProfileRecord, GenerationJ
 from app.schemas.cv import CandidateProfile, JobProfile
 from app.services.document_parser import extract_text, parse_candidate
 from app.services.generation_service import generate_for_application
+from app.services.llm import GeminiATSUnavailableError
 from app.services.jd_parser import analyze_jd
 from app.services.questionnaire import missing_questions
 
@@ -101,6 +102,17 @@ def generate(
             "ats": resume.ats_json,
             "template": resume.template_key,
         }
+    except GeminiATSUnavailableError as exc:
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+        raise HTTPException(
+            503,
+            "Gemini ATS evaluation is temporarily unavailable. "
+            "The CV was generated, but ATS scoring could not be completed. "
+            "Please retry in a moment.",
+        ) from exc
     except Exception as exc:
         # generation_for_application records a failed generation when the
         # transaction remains usable. If the final commit itself fails,
