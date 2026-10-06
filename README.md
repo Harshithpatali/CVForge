@@ -204,3 +204,10 @@ Groq receives the parsed JD, candidate evidence, project evidence, and GitHub re
 
 ### Gemini — ATS evaluation
 After Groq generates the CV, Gemini receives the parsed job signals plus the generated CV and returns a structured 0–100 ATS/job-match report containing keyword coverage, required-skill coverage, title alignment, responsibility alignment, strengths, gaps, missing keywords, and recommendations.
+
+## Login latency
+
+The Streamlit login screen starts a non-blocking readiness probe against `/ready`.
+The readiness endpoint performs a lightweight database check, warming the Render
+process and its Neon connection while the user enters credentials. Login itself
+remains a normal authenticated request and does not depend on the warm-up succeeding.
