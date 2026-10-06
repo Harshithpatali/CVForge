@@ -738,6 +738,30 @@ FEATURES: Tuple[Tuple[str, str, str], ...] = (
 )
 
 
+def _start_backend_warmup() -> None:
+    """Warm the Render API/Neon connection without blocking the login screen."""
+    if st.session_state.get("api_warm_started"):
+        return
+
+    st.session_state.api_warm_started = True
+
+    def _probe() -> None:
+        try:
+            requests.get(
+                f"{API_URL}/ready",
+                timeout=(3, 8),
+                headers={"User-Agent": "CVForge-UI/1.0"},
+            )
+        except requests.RequestException:
+            pass
+
+    threading.Thread(
+        target=_probe,
+        name="cvforge-api-warmup",
+        daemon=True,
+    ).start()
+
+
 def login_screen() -> None:
     _start_backend_warmup()
 
@@ -1436,7 +1460,7 @@ def new_application() -> None:
             with upload_tab:
                 cv = st.file_uploader(
                     "Upload CV",
-                    type=["pdf", "docx", "txt", "md"],
+                    type=["pdf", "docx", "txt", "md", "tex"],
                     key=f"cv_upload_{st.session_state.form_seq}",
                     help="PDF, DOCX, TXT or Markdown.",
                     label_visibility="collapsed",
