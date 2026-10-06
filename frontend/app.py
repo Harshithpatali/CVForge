@@ -2124,6 +2124,39 @@ def render_resume(result: Dict[str, Any]) -> None:
     for warning in ats.get("warnings") or []:
         st.warning(str(warning), icon="⚠️")
 
+    # ----- AI Copilot ----------------------------------------------------- #
+    with st.container(border=True):
+        st.markdown("#### CVForge AI Copilot")
+        st.caption(
+            "Ask questions about this exact job, CV and ATS review. Copilot uses the saved evidence "
+            "and can explain gaps or suggest the next truthful action."
+        )
+
+        copilot_key = f"copilot_answer_{resume_id}_{version}"
+        with st.form(f"copilot_form_{resume_id}_{version}", clear_on_submit=False, border=False):
+            question = st.text_input(
+                "Ask Copilot",
+                key=f"copilot_question_{resume_id}_{version}",
+                placeholder="Why is my ATS score low? What should I change first?",
+            )
+            ask = st.form_submit_button("Ask AI →", type="primary", **FW)
+
+        if ask:
+            try:
+                with st.spinner("Thinking with your job + CV context…"):
+                    answer = post(
+                        f"/api/v1/ai/resumes/{resume_id}/copilot",
+                        st.session_state.token,
+                        json={"question": question},
+                    )
+                st.session_state[copilot_key] = answer.get("answer", "")
+            except APIError as exc:
+                show_error(exc)
+
+        if st.session_state.get(copilot_key):
+            with st.container(border=True):
+                st.markdown(st.session_state[copilot_key])
+
     # ----- Preview -------------------------------------------------------- #
     with st.container(border=True):
         if resume.get("name"):
