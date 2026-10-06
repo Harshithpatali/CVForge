@@ -6,15 +6,12 @@ class Settings(BaseSettings):
 
     database_url: str
 
-    # LLM provider selection: groq or gemini
-    llm_provider: str = 'groq'
-
-    # Groq
+    # Groq builds the tailored resume.
     groq_api_key: str = ''
     groq_model: str = 'openai/gpt-oss-120b'
     groq_base_url: str = 'https://api.groq.com/openai/v1'
 
-    # Google Gemini / AI Studio
+    # Gemini evaluates ATS/job-match quality after generation.
     gemini_api_key: str = ''
     gemini_model: str = 'gemini-3.8-flash'
 
