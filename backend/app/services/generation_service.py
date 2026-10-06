@@ -12,8 +12,7 @@ from app.models.entities import (
 )
 from app.schemas.cv import CandidateProfile, JobProfile, Project, ProjectLink
 from app.schemas.resume import GeneratedResume, ResumeLink, ResumeProject
-from app.services.ats_validator import validate
-from app.services.llm import generate_resume
+from app.services.llm import evaluate_ats, generate_resume
 from app.services.prompt_engine import build_generation_prompt, select_template
 
 
@@ -102,6 +101,7 @@ def _apply_link_evidence(candidate: CandidateProfile, answers: dict[str, str]) -
                     links=links,
                 )
             )
+
 
 def _apply_github_repository_evidence(candidate: CandidateProfile) -> None:
     existing = {_project_key(project.name): project for project in candidate.projects if project.name}
@@ -213,6 +213,7 @@ def _restore_project_links(resume: GeneratedResume, candidate: CandidateProfile)
                 )
             )
             generated_keys.add(_project_key(project.name))
+
 
 def _record_failure(
     db: Session,
@@ -350,6 +351,7 @@ def generate_for_application(
         )
         prompt_version = _prompt_version(db, template, template.instructions)
 
+        # Step 1: Groq builds the tailored CV.
         raw = generate_resume(prompt)
         resume = GeneratedResume.model_validate(raw)
         resume.contact_line = _contact_line_from_evidence(
@@ -364,7 +366,11 @@ def generate_for_application(
         ]
         resume.professional_links = [x for x in resume.professional_links if x.url]
 
-        ats = validate(resume, job, candidate)
+        # Step 2: Gemini independently evaluates the generated CV against the JD.
+        ats = evaluate_ats(
+            job.model_dump(),
+            resume.model_dump(),
+        )
 
         latest = (
             db.query(ResumeArtifact)
