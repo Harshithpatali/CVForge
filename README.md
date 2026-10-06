@@ -177,6 +177,63 @@ studio-ui-2026.10.06
 ```
 
 
+## AI application architecture
+
+CVForge is a multi-stage AI decision system rather than a single LLM prompt:
+
+```text
+CV / pasted evidence
+      │
+      ▼
+Deterministic document extraction
+      │
+      ├── PDF hyperlink annotation extraction
+      ├── LaTeX structure + URL extraction
+      └── candidate evidence baseline
+      │
+      ▼
+Gemini fast model
+      │
+      ├── job intelligence extraction
+      └── candidate evidence normalization
+      │
+      ▼
+Public GitHub evidence tool
+      │
+      ▼
+Groq
+      │
+      └── truthful tailored CV generation
+      │
+      ▼
+AI evaluation layer
+      │
+      ├── Gemini ATS judge
+      ├── Gemini semantic embeddings
+      └── deterministic ATS/link checks
+      │
+      ▼
+Hybrid AI match score
+      │
+      ├── gap analysis
+      ├── missing capabilities
+      └── portfolio project planner
+      │
+      ▼
+AI Optimizer (optional)
+      │
+      ├── Gemini identifies highest-impact gaps
+      ├── Groq applies evidence-preserving repairs
+      └── re-score, max 2 passes
+      │
+      ▼
+CVForge AI Copilot
+```
+
+Gemini structured output is used where CVForge needs predictable machine-readable decisions, and Gemini embeddings provide semantic job/resume matching. Google's current Gemini documentation explicitly supports structured JSON Schema responses for extraction/agentic workflows and the current `gemini-embedding-2` model for semantic search and related tasks. citeturn655480search2turn655480search1
+
+The optional optimizer is intentionally bounded to two passes so it behaves like a controlled AI agent loop rather than an unbounded self-rewrite loop. Gemini 3.8 Flash is currently a stable production model positioned for autonomous/agentic workflows; the fast extraction path uses Gemini 3.5 Flash-Lite. citeturn519339search0turn519339search1
+
 ## Resume layout controls
 
 CVForge keeps the reference one-column resume format shown in the product design while allowing the applicant to choose the document density and target length:
