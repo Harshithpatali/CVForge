@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     # Gemini evaluates ATS/job-match quality after generation.
     gemini_api_key: str = ''
     gemini_model: str = 'gemini-3.8-flash'
+    # Comma-separated fallback models used when Gemini returns transient 429/5xx errors.
+    gemini_fallback_models: str = 'gemini-3.6-flash,gemini-3.5-flash-lite'
+    gemini_retry_attempts: int = 2
 
     # Authentication
     jwt_secret: str = 'change-me-in-production'
