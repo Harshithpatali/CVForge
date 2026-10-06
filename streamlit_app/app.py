@@ -63,8 +63,6 @@ NAV_ITEMS: Tuple[Tuple[str, str], ...] = (
 
 APP_CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
 :root{
   --cvf-bg:#f6f7fb;
   --cvf-surface:#ffffff;
@@ -1970,6 +1968,9 @@ def applications() -> None:
         "Every role you have analyzed, and the CV revisions generated for it.",
         eyebrow="Workspace",
     )
+    if st.button("↻ Refresh list", key="applications_refresh", **FW):
+        _invalidate_api_cache("applications")
+        st.rerun(scope="fragment")
 
     try:
         with st.spinner("Loading applications…"):
@@ -2053,6 +2054,9 @@ def profiles() -> None:
         "Save reusable evidence profiles so you never re-upload the same CV twice.",
         eyebrow="Workspace",
     )
+    if st.button("↻ Refresh profiles", key="profiles_refresh", **FW):
+        _invalidate_api_cache("profiles")
+        st.rerun(scope="fragment")
 
     try:
         with st.spinner("Loading profiles…"):
@@ -2141,7 +2145,14 @@ def dashboard() -> None:
     st.markdown('<div style="height:1rem"></div>', unsafe_allow_html=True)
 
     # ----- Quick actions -------------------------------------------------- #
-    st.markdown("#### Quick actions")
+    rcol, hcol = st.columns([1, 5])
+    with hcol:
+        st.markdown("#### Quick actions")
+    with rcol:
+        if st.button("↻ Refresh", key="dashboard_refresh", **FW):
+            _invalidate_api_cache("applications", "profiles")
+            st.rerun(scope="fragment")
+
     q1, q2, q3 = st.columns(3)
     if q1.button("✨ Tailor a new CV", type="primary", key="qa_new", **FW):
         st.session_state.page = "CV Studio"
