@@ -68,6 +68,10 @@ class APIError(Exception):
     def is_validation_error(self) -> bool:
         return self.status == 422
 
+    @property
+    def is_service_unavailable(self) -> bool:
+        return self.status == 503
+
 
 # --------------------------------------------------------------------------- #
 # Session
