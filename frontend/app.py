@@ -9,6 +9,8 @@ import copy
 import html
 import re
 import time
+import threading
+import requests
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import streamlit as st
@@ -453,6 +455,7 @@ _SESSION_DEFAULTS: Dict[str, Any] = {
     "draft_candidate": None,
     "draft_candidate_seq": None,
     "evidence_saved_seq": None,
+    "api_warm_started": False,
 }
 
 for _key, _value in _SESSION_DEFAULTS.items():
@@ -736,6 +739,8 @@ FEATURES: Tuple[Tuple[str, str, str], ...] = (
 
 
 def login_screen() -> None:
+    _start_backend_warmup()
+
     st.markdown('<div style="height:3vh"></div>', unsafe_allow_html=True)
 
     left, right = st.columns([1.15, 1], gap="large")
@@ -2083,7 +2088,7 @@ def render_resume(result: Dict[str, Any]) -> None:
     with st.expander("Edit resume and save a new revision"):
         st.info(
             "Edits are form-batched. Saving the revision re-runs Gemini ATS evaluation on the exact CV you saved.",
-            icon="✦",
+            icon="💡",
         )
 
         edited = copy.deepcopy(resume)
