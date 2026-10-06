@@ -1,0 +1,37 @@
+name: Python syntax checks
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile backend
+        run: python -m compileall -q backend/app backend/tests
+
+      - name: Compile frontend
+        run: python -m compileall -q frontend
+
+      - name: Check key imports
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+        run: |
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+
+          for path in Path("app").rglob("*.py"):
+              ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+          print("All backend Python files parsed successfully.")
+          PY
