@@ -1587,6 +1587,9 @@ def new_application() -> None:
     # -------------------------------------------------------------- #
     with st.container(border=True):
         st.markdown("### 2 · Job intelligence")
+        st.caption(
+            "AI-extracted role intelligence is used as the planning layer; a deterministic parser remains the fallback."
+        )
         metrics = st.columns(4)
         metrics[0].markdown(
             stat_card(
@@ -1983,7 +1986,7 @@ def render_resume(result: Dict[str, Any]) -> None:
 
     with st.container(border=True):
         score_rows = [
-            ("ATS score", score, "", 100.0),
+            ("AI match", score, "", 100.0),
             ("Keyword coverage", ats.get("keyword_coverage", 0), "%", 100.0),
             ("Required skills", ats.get("required_skill_coverage", 0), "%", 100.0),
             ("Responsibility match", ats.get("responsibility_alignment", 0), "%", 100.0),
@@ -2022,7 +2025,8 @@ def render_resume(result: Dict[str, Any]) -> None:
     with st.container(border=True):
         st.markdown("#### Gemini ATS review")
         st.caption(
-            "Gemini evaluated the generated CV against the job signals extracted from the user's job description."
+            "Gemini provides the qualitative judge. The displayed AI match score combines that judgment "
+            "with semantic embedding similarity and deterministic evidence checks."
         )
 
         matched = ats.get("matched_keywords") or []
