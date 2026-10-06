@@ -11,6 +11,7 @@ from docx.shared import Inches, Pt, RGBColor
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate
+from pypdf import PdfReader
 
 URL_RE = re.compile(r"https?://[^\s|]+|www\.[^\s|]+", re.I)
 
@@ -134,74 +135,108 @@ def _section(story, title, style):
     )
 
 
-def render_pdf(resume: dict) -> bytes:
+def _layout_profile(page_target: int = 1, style: str = "reference") -> dict:
+    """Return typography/spacing settings for a target page count."""
+    page_target = 2 if int(page_target) == 2 else 1
+    style = (style or "reference").strip().lower()
+    if style not in {"reference", "compact"}:
+        style = "reference"
+
+    if style == "compact" or page_target == 1:
+        return {
+            "right": 30,
+            "left": 30,
+            "top": 24,
+            "bottom": 26,
+            "title": 17,
+            "title_leading": 18.5,
+            "contact": 7.2,
+            "contact_leading": 8.4,
+            "headline": 9.4,
+            "headline_leading": 10.5,
+            "section": 9.4,
+            "section_leading": 10.0,
+            "body": 7.75,
+            "body_leading": 9.15,
+            "entry": 8.15,
+            "entry_leading": 9.3,
+            "small": 7.25,
+            "small_leading": 8.2,
+            "section_space": 4.5,
+            "bullet_space": 1.2,
+        }
+
+    return {
+        "right": 36,
+        "left": 36,
+        "top": 28,
+        "bottom": 30,
+        "title": 18,
+        "title_leading": 20,
+        "contact": 8.2,
+        "contact_leading": 10,
+        "headline": 10.5,
+        "headline_leading": 12,
+        "section": 10.2,
+        "section_leading": 11,
+        "body": 8.8,
+        "body_leading": 10.7,
+        "entry": 9.2,
+        "entry_leading": 11,
+        "small": 8.2,
+        "small_leading": 9.6,
+        "section_space": 6,
+        "bullet_space": 2,
+    }
+
+
+def _render_pdf_once(resume: dict, page_target: int, style: str) -> bytes:
     out = BytesIO()
+    p = _layout_profile(page_target, style)
 
     title = ParagraphStyle(
-        "CVTitle",
-        fontName="Helvetica-Bold",
-        fontSize=18,
-        leading=20,
-        textColor="#16478E",
-        alignment=1,
-        spaceAfter=3,
+        "CVTitle", fontName="Helvetica-Bold",
+        fontSize=p["title"], leading=p["title_leading"],
+        textColor="#16478E", alignment=1, spaceAfter=3,
     )
     contact = ParagraphStyle(
-        "CVContact",
-        fontName="Helvetica",
-        fontSize=8.2,
-        leading=10,
-        alignment=1,
-        spaceAfter=3,
+        "CVContact", fontName="Helvetica",
+        fontSize=p["contact"], leading=p["contact_leading"],
+        alignment=1, spaceAfter=3,
     )
     headline = ParagraphStyle(
-        "CVHeadline",
-        fontName="Helvetica-Bold",
-        fontSize=10.5,
-        leading=12,
-        alignment=1,
-        spaceAfter=7,
+        "CVHeadline", fontName="Helvetica-Bold",
+        fontSize=p["headline"], leading=p["headline_leading"],
+        alignment=1, spaceAfter=5 if page_target == 1 else 7,
     )
     section = ParagraphStyle(
-        "CVSection",
-        fontName="Helvetica-Bold",
-        fontSize=10.2,
-        leading=11,
-        textColor="#16478E",
-        spaceBefore=6,
-        spaceAfter=0,
+        "CVSection", fontName="Helvetica-Bold",
+        fontSize=p["section"], leading=p["section_leading"],
+        textColor="#16478E", spaceBefore=p["section_space"], spaceAfter=0,
     )
     body = ParagraphStyle(
-        "CVBody",
-        fontName="Helvetica",
-        fontSize=8.8,
-        leading=10.7,
-        spaceAfter=2,
+        "CVBody", fontName="Helvetica",
+        fontSize=p["body"], leading=p["body_leading"],
+        spaceAfter=p["bullet_space"],
     )
     entry = ParagraphStyle(
-        "CVEntry",
-        fontName="Helvetica",
-        fontSize=9.2,
-        leading=11,
-        spaceBefore=2,
-        spaceAfter=1,
+        "CVEntry", fontName="Helvetica",
+        fontSize=p["entry"], leading=p["entry_leading"],
+        spaceBefore=1.5, spaceAfter=1,
     )
     small = ParagraphStyle(
-        "CVSmall",
-        fontName="Helvetica",
-        fontSize=8.2,
-        leading=9.6,
-        textColor="#333333",
-        spaceAfter=2,
+        "CVSmall", fontName="Helvetica",
+        fontSize=p["small"], leading=p["small_leading"],
+        textColor="#333333", spaceAfter=p["bullet_space"],
     )
 
     doc = SimpleDocTemplate(
         out,
         pagesize=A4,
-        rightMargin=36,
-        leftMargin=36,
-        topMargin=28,
-        bottomMargin=30,
+        rightMargin=p["right"],
+        leftMargin=p["left"],
+        topMargin=p["top"],
+        bottomMargin=p["bottom"],
         title=_normalise_text(resume.get("name", "Resume")),
         author="CVForge",
     )
@@ -223,9 +258,7 @@ def render_pdf(resume: dict) -> bytes:
                     f'<u>{escape(label)}</u></link>'
                 )
         if link_parts:
-            story.append(
-                Paragraph(" | ".join(link_parts), contact)
-            )
+            story.append(Paragraph(" | ".join(link_parts), contact))
 
     if resume.get("headline"):
         story.append(
@@ -239,22 +272,20 @@ def render_pdf(resume: dict) -> bytes:
     if resume.get("skill_groups"):
         _section(story, "Technical Skills", section)
         for group, values in resume["skill_groups"].items():
-            if not values:
-                continue
-            text = ", ".join(_normalise_text(x) for x in values)
-            story.append(
-                Paragraph(
-                    f"<b>{escape(_normalise_text(group))}:</b> {_pdf_rich_text(text)}",
-                    body,
+            if values:
+                text = ", ".join(_normalise_text(x) for x in values)
+                story.append(
+                    Paragraph(
+                        f"<b>{escape(_normalise_text(group))}:</b> "
+                        f"{_pdf_rich_text(text)}",
+                        body,
+                    )
                 )
-            )
     elif resume.get("skills"):
         _section(story, "Technical Skills", section)
         story.append(
             Paragraph(
-                _pdf_rich_text(
-                    ", ".join(_normalise_text(x) for x in resume["skills"])
-                ),
+                _pdf_rich_text(", ".join(_normalise_text(x) for x in resume["skills"])),
                 body,
             )
         )
@@ -266,27 +297,21 @@ def render_pdf(resume: dict) -> bytes:
             company = _normalise_text(item.get("company", ""))
             dates = _normalise_text(item.get("dates", ""))
             location = _normalise_text(item.get("location", ""))
-
             right = " | ".join(x for x in (dates, location) if x)
             heading = escape(
                 " - ".join(x for x in (title_text, company) if x)
             )
             if right:
                 heading += f' <font color="#444444">| {escape(right)}</font>'
-
             story.append(Paragraph(heading, entry))
-
             for bullet in item.get("bullets", []):
-                story.append(
-                    Paragraph("- " + _pdf_rich_text(bullet), body)
-                )
+                story.append(Paragraph("- " + _pdf_rich_text(bullet), body))
 
     if resume.get("projects"):
-        _section(story, "Projects", section)
+        _section(story, "Selected Data Science Projects", section)
         for item in resume["projects"]:
             name = _normalise_text(item.get("name", ""))
             url = _normalise_text(item.get("url", ""))
-
             project_heading = f"<b><i>{escape(name)}</i></b>"
             links = item.get("links") or []
             if links:
@@ -305,23 +330,14 @@ def render_pdf(resume: dict) -> bytes:
                     f'color="#000000"><u>Project</u></link>'
                 )
             story.append(Paragraph(project_heading, entry))
-
             technologies = item.get("technologies") or []
             if technologies:
-                tech = ", ".join(
-                    _normalise_text(x) for x in technologies
-                )
+                tech = ", ".join(_normalise_text(x) for x in technologies)
                 story.append(
-                    Paragraph(
-                        "<i>Technologies: </i>" + _pdf_rich_text(tech),
-                        small,
-                    )
+                    Paragraph("<i>Technologies: </i>" + _pdf_rich_text(tech), small)
                 )
-
             for bullet in item.get("bullets", []):
-                story.append(
-                    Paragraph("- " + _pdf_rich_text(bullet), body)
-                )
+                story.append(Paragraph("- " + _pdf_rich_text(bullet), body))
 
     if resume.get("education"):
         _section(story, "Education", section)
@@ -330,47 +346,85 @@ def render_pdf(resume: dict) -> bytes:
             field = _normalise_text(item.get("field", ""))
             institution = _normalise_text(item.get("institution", ""))
             dates = _normalise_text(item.get("dates", ""))
-
             line = " ".join(x for x in (degree, field) if x)
             line = " - ".join(x for x in (line, institution) if x)
             if dates:
                 line += f" | {dates}"
-
-            story.append(
-                Paragraph(
-                    f"<b>{escape(line)}</b>",
-                    entry,
-                )
-            )
+            story.append(Paragraph(f"<b>{escape(line)}</b>", entry))
 
     if resume.get("certifications"):
         _section(story, "Certifications", section)
         for item in resume["certifications"]:
-            story.append(
-                Paragraph("- " + _pdf_rich_text(item), body)
-            )
+            story.append(Paragraph("- " + _pdf_rich_text(item), body))
 
     doc.build(story)
     return out.getvalue()
 
 
-def render_docx(resume: dict) -> bytes:
+def render_pdf(
+    resume: dict,
+    page_target: int = 1,
+    style: str = "reference",
+) -> bytes:
+    """Render a one- or two-page ATS-friendly CV in the chosen layout."""
+    page_target = 2 if int(page_target) == 2 else 1
+    style = (style or "reference").strip().lower()
+    if style not in {"reference", "compact"}:
+        style = "reference"
+
+    # For one-page requests, start compact. For two-page requests, use the
+    # reference spacing. A second compact pass is a safety valve for unusually
+    # dense resumes.
+    attempts = [style]
+    if page_target == 1 and style != "compact":
+        attempts = ["reference", "compact"]
+    elif page_target == 2 and style == "reference":
+        attempts = ["reference", "compact"]
+
+    best = None
+    for attempt_style in attempts:
+        payload = _render_pdf_once(resume, page_target, attempt_style)
+        pages = len(PdfReader(BytesIO(payload)).pages)
+        best = payload
+        if pages <= page_target:
+            return payload
+
+    return best
+
+def render_docx(resume: dict, page_target: int = 1, style: str = "reference") -> bytes:
+    page_target = 2 if int(page_target) == 2 else 1
+    style = (style or "reference").strip().lower()
+    if style not in {"reference", "compact"}:
+        style = "reference"
+
     doc = Document()
     section = doc.sections[0]
-    section.top_margin = Inches(0.45)
-    section.bottom_margin = Inches(0.45)
-    section.left_margin = Inches(0.55)
-    section.right_margin = Inches(0.55)
+    if page_target == 1 or style == "compact":
+        section.top_margin = Inches(0.38)
+        section.bottom_margin = Inches(0.38)
+        section.left_margin = Inches(0.50)
+        section.right_margin = Inches(0.50)
+        normal_size = 8.3
+        name_size = 17
+        heading_size = 9.2
+    else:
+        section.top_margin = Inches(0.45)
+        section.bottom_margin = Inches(0.45)
+        section.left_margin = Inches(0.55)
+        section.right_margin = Inches(0.55)
+        normal_size = 9
+        name_size = 18
+        heading_size = 10
 
     normal = doc.styles["Normal"]
     normal.font.name = "Arial"
-    normal.font.size = Pt(9)
+    normal.font.size = Pt(normal_size)
 
     name = doc.add_paragraph()
     name.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = name.add_run(_normalise_text(resume.get("name", "Resume")))
     run.bold = True
-    run.font.size = Pt(18)
+    run.font.size = Pt(name_size)
     run.font.color.rgb = RGBColor(22, 71, 142)
 
     if resume.get("contact_line"):
@@ -395,7 +449,7 @@ def render_docx(resume: dict) -> bytes:
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run = p.add_run(_normalise_text(resume["headline"]))
         run.bold = True
-        run.font.size = Pt(10)
+        run.font.size = Pt(heading_size)
 
     def heading(text):
         p = doc.add_paragraph()
@@ -403,7 +457,7 @@ def render_docx(resume: dict) -> bytes:
         run.bold = True
         run.font.size = Pt(10)
         run.font.color.rgb = RGBColor(22, 71, 142)
-        p.paragraph_format.space_before = Pt(6)
+        p.paragraph_format.space_before = Pt(4 if page_target == 1 else 6)
         p.paragraph_format.space_after = Pt(1)
 
     if resume.get("summary"):
