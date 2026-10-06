@@ -141,10 +141,7 @@ ATS_JSON_SCHEMA = {
                 "additionalProperties": False,
                 "properties": {
                     "title": {"type": "string"},
-                    "priority": {
-                        "type": "string",
-                        "enum": ["High", "Medium", "Low"],
-                    },
+                    "priority": {"type": "string"},
                     "why_missing": {"type": "string"},
                     "skills_to_demonstrate": {
                         "type": "array",
