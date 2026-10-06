@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -44,14 +46,21 @@ async def analyze(
     else:
         candidate = parse_candidate("", "txt")
 
-    # Deterministic extraction gives us a fast baseline; Gemini then enriches
-    # job/candidate structure when the configured fast model is available.
-    job = ai_analyze_job(jd, analyze_jd(jd))
-    candidate = ai_extract_candidate(
-        candidate.raw_text,
-        cv.filename if cv else "pasted-cv.txt",
-        candidate,
-    )
+    # Deterministic extraction gives us a fast baseline. The two independent
+    # Gemini enrichment calls run concurrently so AI analysis latency is bounded
+    # by the slower model call rather than their sum.
+    baseline_job = analyze_jd(jd)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        job_future = pool.submit(ai_analyze_job, jd, baseline_job)
+        candidate_future = pool.submit(
+            ai_extract_candidate,
+            candidate.raw_text,
+            cv.filename if cv else "pasted-cv.txt",
+            candidate,
+        )
+        job = job_future.result()
+        candidate = candidate_future.result()
+
     questions = missing_questions(candidate, job)
 
     return {
