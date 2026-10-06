@@ -1563,12 +1563,18 @@ def new_application() -> None:
     inspect_github_repositories(seq)
     candidate["github_repositories"] = st.session_state.github_repos
 
-    # Additional evidence + links.
+    # Additional evidence + links and generation action.
+    #
+    # Both buttons live inside the same form so the latest typed evidence is
+    # committed to Streamlit before generation starts. This avoids the old
+    # disabled-button state where the form had not yet submitted its values.
     with st.form(f"evidence_form_{seq}", clear_on_submit=False, border=False):
         questions = analysis.get("questions") or []
         if questions:
             st.markdown("#### Evidence questions")
-            st.caption("Answer only what is true. These answers are sent to Groq as additional evidence.")
+            st.caption(
+                "Answer only what is true. These answers are sent to Groq as additional evidence."
+            )
             for question in questions:
                 q_key = question.get("key")
                 if not q_key:
@@ -1584,47 +1590,41 @@ def new_application() -> None:
         for question in questions:
             q_key = question.get("key")
             if q_key:
-                answers_local[q_key] = st.session_state.get(f"c{seq}_q_{q_key}", "")
+                answers_local[q_key] = st.session_state.get(
+                    f"c{seq}_q_{q_key}", ""
+                )
 
         answers_local.update(collect_link_evidence(candidate, seq))
 
-        evidence_saved = st.form_submit_button("Save evidence & links", type="primary", **FW)
+        save_evidence, generate_cv = st.columns([1, 1])
 
-    if evidence_saved:
-        st.session_state.link_answers = answers_local
-        st.session_state.evidence_saved_seq = seq
-        st.toast("Evidence saved.", icon="✅")
-
-    answers = dict(st.session_state.get("link_answers") or {})
-
-    # -------------------------------------------------------------- #
-    # Step 5 — Generation
-    # -------------------------------------------------------------- #
-    st.markdown('<hr class="cvf-divider"/>', unsafe_allow_html=True)
-    with st.container(border=True):
-        c1, c2 = st.columns([2, 1])
-        with c1:
-            st.markdown("### 5 · Generate")
-            st.caption(
-                "Groq builds the tailored CV. Gemini then independently evaluates the finished CV against this exact job."
-            )
-            if st.session_state.get("evidence_saved_seq") != seq:
-                st.markdown(
-                    '<div class="cvf-note"><strong>Before generating:</strong> save the evidence section once so the exact links and answers are committed.</div>',
-                    unsafe_allow_html=True,
-                )
-        with c2:
-            generate = st.button(
-                "Generate CV with Groq →",
-                type="primary",
-                disabled=st.session_state.get("evidence_saved_seq") != seq,
-                key=f"generate_button_{seq}",
+        with save_evidence:
+            save_clicked = st.form_submit_button(
+                "Save evidence & links",
+                type="secondary",
                 **FW,
             )
 
-    if generate:
+        with generate_cv:
+            generate_clicked = st.form_submit_button(
+                "Generate CV with Groq →",
+                type="primary",
+                **FW,
+            )
+
+    if save_clicked or generate_clicked:
+        st.session_state.link_answers = answers_local
+        st.session_state.evidence_saved_seq = seq
+
+        if save_clicked:
+            st.toast("Evidence saved.", icon="✅")
+
+    if generate_clicked:
         try:
-            with st.status("Building and evaluating your CV…", expanded=True) as status:
+            with st.status(
+                "Building and evaluating your CV…",
+                expanded=True,
+            ) as status:
                 status.write("Creating the application")
                 created = post(
                     "/api/v1/jobs/applications",
@@ -1637,20 +1637,46 @@ def new_application() -> None:
                 result = post(
                     f"/api/v1/jobs/applications/{created['id']}/generate",
                     st.session_state.token,
-                    json=answers,
+                    json={"answers": answers_local},
                 )
 
+                ats_score = float(
+                    (result.get("ats") or {}).get("score", 0) or 0
+                )
                 status.update(
-                    label=f"CV ready · Gemini ATS score {float((result.get('ats') or {}).get('score', 0) or 0):.1f}/100",
+                    label=f"CV ready · Gemini ATS score {ats_score:.1f}/100",
                     state="complete",
                 )
 
             st.session_state.resume = result
             _invalidate_api_cache("applications")
-            st.toast("Tailored CV generated and independently reviewed.", icon="✅")
+            st.toast(
+                "Tailored CV generated and independently reviewed.",
+                icon="✅",
+            )
         except APIError as exc:
             show_error(exc)
 
+    # -------------------------------------------------------------- #
+    # Step 5 — Workflow status
+    # -------------------------------------------------------------- #
+    st.markdown('<hr class="cvf-divider"/>', unsafe_allow_html=True)
+
+    if st.session_state.resume:
+        with st.container(border=True):
+            st.markdown("### 5 · Generated CV")
+            st.caption(
+                "Groq generated the CV and Gemini independently evaluated the finished document."
+            )
+    else:
+        with st.container(border=True):
+            st.markdown("### 5 · Generate")
+            st.caption(
+                "Complete the evidence form above. The Generate button submits the evidence "
+                "and immediately starts the Groq → Gemini pipeline."
+            )
+
+    # Existing generated resume remains visible below.
     if st.session_state.resume:
         render_resume(st.session_state.resume)
 
