@@ -71,10 +71,21 @@ def update_resume(
             candidate.model_dump(exclude={"raw_text"}),
         )
 
+        resume_payload = resume.model_dump()
+        saved_options = (
+            resume_artifact.resume_json.get("_render_options", {})
+            if isinstance(resume_artifact.resume_json, dict)
+            else {}
+        )
+        resume_payload["_render_options"] = saved_options or {
+            "page_target": 1,
+            "style": "reference",
+        }
+
         new_artifact = ResumeArtifact(
             application_id=resume_artifact.application_id,
             version=resume_artifact.version + 1,
-            resume_json=resume.model_dump(),
+            resume_json=resume_payload,
             ats_json=ats,
             prompt_version_id=resume_artifact.prompt_version_id,
             prompt_key=resume_artifact.prompt_key,
