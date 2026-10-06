@@ -182,3 +182,58 @@ evidence.
 
 Never invent links, metrics, dates, employers, or credentials.
 """
+
+
+
+def build_optimization_prompt(
+    job: dict,
+    candidate: dict,
+    resume: dict,
+    ats: dict,
+) -> str:
+    """Create a targeted repair prompt for the Groq CV generator."""
+    import json
+
+    missing = ats.get("missing_keywords") or []
+    gaps = ats.get("gaps") or []
+    recommendations = ats.get("recommendations") or []
+    semantic_gaps = ats.get("semantic_gap_actions") or []
+
+    return f"""
+You are CVForge's CV optimization agent.
+
+Your task is to improve an already-generated resume against the exact target job.
+
+HARD RULES:
+1. Preserve all factual evidence. Never invent experience, dates, metrics, skills, employers, credentials or URLs.
+2. Do not add a missing job skill unless the candidate evidence already supports it.
+3. You may improve wording, ordering, headline, summary, skill grouping, project emphasis,
+   and bullet phrasing when supported by the evidence.
+4. Do not create fictional achievements to raise the ATS score.
+5. Preserve all valid candidate/project URLs exactly.
+6. Keep the existing one-column ATS-friendly structure.
+7. Prefer removing low-value content over adding unsupported content.
+8. Return the complete CVForge resume JSON schema only.
+
+TARGET JOB:
+{json.dumps(job, ensure_ascii=False)}
+
+CANDIDATE EVIDENCE:
+{json.dumps(candidate, ensure_ascii=False)}
+
+CURRENT RESUME:
+{json.dumps(resume, ensure_ascii=False)}
+
+CURRENT AI REVIEW:
+{json.dumps({
+    "score": ats.get("score"),
+    "gemini_score": ats.get("gemini_score"),
+    "semantic_match_score": ats.get("semantic_match_score"),
+    "missing_keywords": missing[:20],
+    "gaps": gaps[:8],
+    "recommendations": recommendations[:8],
+    "semantic_gap_actions": semantic_gaps[:8],
+}, ensure_ascii=False)}
+
+Make only high-impact truthful repairs and return the full resume.
+"""
