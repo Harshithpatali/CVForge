@@ -64,6 +64,7 @@ def test_evaluate_ats_uses_gemini(monkeypatch):
 
     assert result["score"] == 84
     assert result["missing_keywords"] == ["Spark"]
+    assert result["project_suggestions"][0]["title"] == "Streaming Analytics Control Tower"
 
 
 def test_gemini_ats_requires_api_key(monkeypatch):
