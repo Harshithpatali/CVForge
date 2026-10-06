@@ -837,186 +837,251 @@ def login_screen() -> None:
 # --------------------------------------------------------------------------- #
 
 def _candidate_editor(candidate: Dict[str, Any], seq: int) -> Dict[str, Any]:
-    """Render the full evidence editor and return the edited candidate."""
-    candidate = copy.deepcopy(candidate or {})
-    contact = candidate.setdefault("contact", {}) or {}
-    candidate["contact"] = contact
-    for key in ("experience", "education", "projects", "skills", "certifications"):
-        candidate.setdefault(key, [])
-    candidate.setdefault("github_repositories", [])
+    """Render one profile section at a time and commit changes through forms."""
+    incoming = copy.deepcopy(candidate or {})
+    incoming.setdefault("contact", {})
+    for field in ("experience", "education", "projects", "skills", "certifications"):
+        incoming.setdefault(field, [])
+
+    if (
+        st.session_state.get("draft_candidate") is None
+        or st.session_state.get("draft_candidate_seq") != seq
+    ):
+        st.session_state.draft_candidate = incoming
+        st.session_state.draft_candidate_seq = seq
+
+    candidate = copy.deepcopy(st.session_state.draft_candidate)
 
     def key(name: str) -> str:
         return f"c{seq}_{name}"
 
-    tabs = st.tabs(
-        ["Personal", "Summary", "Skills", "Experience", "Projects", "Education", "Certifications"]
-    )
+    sections = [
+        "Personal",
+        "Summary",
+        "Skills",
+        "Experience",
+        "Projects",
+        "Education",
+        "Certifications",
+    ]
+    if hasattr(st, "pills"):
+        section = st.pills(
+            "Profile section",
+            sections,
+            default=st.session_state.get(f"c{seq}_profile_section", "Personal"),
+            key=key("profile_section"),
+            label_visibility="collapsed",
+        ) or "Personal"
+    else:
+        section = st.selectbox(
+            "Profile section",
+            sections,
+            key=key("profile_section"),
+            label_visibility="collapsed",
+        )
+    st.session_state[f"c{seq}_profile_section"] = section
 
-    # ----- Personal ------------------------------------------------------- #
-    with tabs[0]:
-        c1, c2 = st.columns(2)
-        contact["name"] = c1.text_input(
-            "Full name", value=contact.get("name", ""), key=key("name"), placeholder="Ada Lovelace"
-        )
-        candidate["headline"] = c2.text_input(
-            "Professional headline",
-            value=candidate.get("headline", ""),
-            key=key("headline"),
-            placeholder="Data Scientist · Machine Learning · Forecasting",
-        )
+    completeness_fields = [
+        bool(candidate.get("contact", {}).get("name")),
+        bool(candidate.get("contact", {}).get("email")),
+        bool(candidate.get("headline")),
+        bool(candidate.get("summary")),
+        bool(candidate.get("skills")),
+        bool(candidate.get("experience")),
+        bool(candidate.get("projects")),
+        bool(candidate.get("education")),
+    ]
+    completion = round(100 * sum(completeness_fields) / len(completeness_fields))
+    st.progress(completion / 100, text=f"Profile completeness · {completion}%")
 
-        c1, c2, c3 = st.columns(3)
-        contact["email"] = c1.text_input(
-            "Email", value=contact.get("email", ""), key=key("email"), placeholder="you@example.com"
-        )
-        contact["phone"] = c2.text_input(
-            "Phone", value=contact.get("phone", ""), key=key("phone"), placeholder="+91 90000 00000"
-        )
-        contact["location"] = c3.text_input(
-            "Location",
-            value=contact.get("location", ""),
-            key=key("location"),
-            placeholder="Bengaluru, India",
-        )
+    contact = candidate["contact"]
 
-        c1, c2, c3 = st.columns(3)
-        contact["linkedin"] = c1.text_input(
-            "LinkedIn",
-            value=contact.get("linkedin", ""),
-            key=key("linkedin"),
-            placeholder="https://linkedin.com/in/…",
-        )
-        contact["github"] = c2.text_input(
-            "GitHub",
-            value=contact.get("github", ""),
-            key=key("github"),
-            placeholder="https://github.com/…",
-        )
-        contact["portfolio"] = c3.text_input(
-            "Portfolio",
-            value=contact.get("portfolio", ""),
-            key=key("portfolio"),
-            placeholder="https://…",
-        )
-        st.caption("Links are preserved and rendered as clickable links in PDF and DOCX exports.")
+    if section == "Personal":
+        with st.form(key(f"personal_form"), clear_on_submit=False, border=False):
+            st.markdown("#### Personal identity")
+            c1, c2 = st.columns(2)
+            name = c1.text_input(
+                "Full name",
+                value=contact.get("name", ""),
+                key=key("name"),
+                placeholder="Ada Lovelace",
+            )
+            headline = c2.text_input(
+                "Professional headline",
+                value=candidate.get("headline", ""),
+                key=key("headline"),
+                placeholder="Data Scientist · Machine Learning · Forecasting",
+            )
+            c1, c2, c3 = st.columns(3)
+            email = c1.text_input(
+                "Email",
+                value=contact.get("email", ""),
+                key=key("email"),
+                placeholder="you@example.com",
+            )
+            phone = c2.text_input(
+                "Phone",
+                value=contact.get("phone", ""),
+                key=key("phone"),
+                placeholder="+91 90000 00000",
+            )
+            location = c3.text_input(
+                "Location",
+                value=contact.get("location", ""),
+                key=key("location"),
+                placeholder="Bengaluru, India",
+            )
+            c1, c2, c3 = st.columns(3)
+            linkedin = c1.text_input(
+                "LinkedIn",
+                value=contact.get("linkedin", ""),
+                key=key("linkedin"),
+                placeholder="https://linkedin.com/in/…",
+            )
+            github = c2.text_input(
+                "GitHub",
+                value=contact.get("github", ""),
+                key=key("github"),
+                placeholder="https://github.com/…",
+            )
+            portfolio = c3.text_input(
+                "Portfolio",
+                value=contact.get("portfolio", ""),
+                key=key("portfolio"),
+                placeholder="https://…",
+            )
+            saved = st.form_submit_button("Save personal details", type="primary", **FW)
 
-    # ----- Summary -------------------------------------------------------- #
-    with tabs[1]:
-        candidate["summary"] = st.text_area(
-            "Professional summary",
-            value=candidate.get("summary", ""),
-            key=key("summary"),
-            height=160,
-            placeholder="Two to four sentences describing what you do, for whom, and the outcomes you deliver.",
-        )
-        st.caption(f"{len(candidate['summary'].split())} words")
+        if saved:
+            contact.update(
+                {
+                    "name": name.strip(),
+                    "email": email.strip(),
+                    "phone": phone.strip(),
+                    "location": location.strip(),
+                    "linkedin": normalise_url(linkedin),
+                    "github": normalise_url(github),
+                    "portfolio": normalise_url(portfolio),
+                }
+            )
+            candidate["headline"] = headline.strip()
+            st.session_state.draft_candidate = candidate
+            st.toast("Personal details saved.", icon="✅")
 
-    # ----- Skills --------------------------------------------------------- #
-    with tabs[2]:
-        raw_skills = st.text_area(
-            "Skills — one per line, or comma separated",
-            value="\n".join(candidate.get("skills", [])),
-            key=key("skills"),
-            height=150,
-        )
-        candidate["skills"] = [
-            item.strip()
-            for item in raw_skills.replace(",", "\n").splitlines()
-            if item.strip()
-        ]
-        if candidate["skills"]:
+    elif section == "Summary":
+        with st.form(key("summary_form"), clear_on_submit=False, border=False):
+            st.markdown("#### Professional summary")
+            summary = st.text_area(
+                "Summary",
+                value=candidate.get("summary", ""),
+                key=key("summary"),
+                height=190,
+                placeholder="Two to four sentences describing what you do, the problems you solve, and the outcomes you have delivered.",
+            )
+            st.caption(f"{len(summary.split())} words")
+            saved = st.form_submit_button("Save summary", type="primary", **FW)
+        if saved:
+            candidate["summary"] = summary.strip()
+            st.session_state.draft_candidate = candidate
+            st.toast("Summary saved.", icon="✅")
+
+    elif section == "Skills":
+        with st.form(key("skills_form"), clear_on_submit=False, border=False):
+            st.markdown("#### Technical skills")
+            raw_skills = st.text_area(
+                "Skills",
+                value="\n".join(candidate.get("skills", [])),
+                key=key("skills"),
+                height=190,
+                placeholder="Python\nSQL\nPandas\nScikit-learn\nTensorFlow\nDocker",
+            )
+            saved = st.form_submit_button("Save skills", type="primary", **FW)
+        if saved:
+            candidate["skills"] = [
+                item.strip()
+                for item in raw_skills.replace(",", "\n").splitlines()
+                if item.strip()
+            ]
+            st.session_state.draft_candidate = candidate
+            st.toast("Skills saved.", icon="✅")
+        if candidate.get("skills"):
             st.markdown(chips(candidate["skills"]), unsafe_allow_html=True)
-        else:
-            st.caption("No skills added yet.")
 
-    # ----- Experience ----------------------------------------------------- #
-    with tabs[3]:
-        experiences = list(candidate.get("experience") or [])
+    elif section == "Experience":
+        st.markdown("#### Professional experience")
         count_key = key("exp_count")
-        minimum = max(3, len(experiences))
-        if count_key not in st.session_state:
-            st.session_state[count_key] = minimum
-        total = max(int(st.session_state[count_key]), minimum)
-        experiences = experiences + [{}] * (total - len(experiences))
+        current_count = max(
+            int(st.session_state.get(count_key, max(3, len(candidate.get("experience") or [])))),
+            max(3, len(candidate.get("experience") or [])),
+        )
+        experiences = list(candidate.get("experience") or [])
+        experiences += [{}] * (current_count - len(experiences))
 
-        edited_experience: List[Dict[str, Any]] = []
-        for idx in range(total):
-            exp = experiences[idx] or {}
-            with st.container(border=True):
+        with st.form(key("experience_form"), clear_on_submit=False, border=False):
+            edited: List[Dict[str, Any]] = []
+            for idx in range(current_count):
+                exp = experiences[idx] or {}
                 st.markdown(f"**Experience {idx + 1}**")
                 c1, c2 = st.columns(2)
-                company = c1.text_input(
-                    "Company", value=exp.get("company", ""), key=key(f"exp_company_{idx}")
-                )
-                title = c2.text_input(
-                    "Job title", value=exp.get("title", ""), key=key(f"exp_title_{idx}")
-                )
+                company = c1.text_input("Company", value=exp.get("company", ""), key=key(f"exp_company_{idx}"))
+                title = c2.text_input("Job title", value=exp.get("title", ""), key=key(f"exp_title_{idx}"))
                 c1, c2, c3 = st.columns(3)
-                start = c1.text_input(
-                    "Start", value=exp.get("start_date", ""), key=key(f"exp_start_{idx}"),
-                    placeholder="Jan 2023",
-                )
-                end = c2.text_input(
-                    "End", value=exp.get("end_date", ""), key=key(f"exp_end_{idx}"),
-                    placeholder="Present",
-                )
-                location = c3.text_input(
-                    "Location", value=exp.get("location", ""), key=key(f"exp_location_{idx}")
-                )
+                start = c1.text_input("Start", value=exp.get("start_date", ""), key=key(f"exp_start_{idx}"), placeholder="Jan 2024")
+                end = c2.text_input("End", value=exp.get("end_date", ""), key=key(f"exp_end_{idx}"), placeholder="Present")
+                location = c3.text_input("Location", value=exp.get("location", ""), key=key(f"exp_location_{idx}"))
                 bullets = st.text_area(
                     "Achievements — one per line",
                     value="\n".join(exp.get("bullets", []) or []),
                     key=key(f"exp_bullets_{idx}"),
-                    height=120,
-                    placeholder="Cut reporting time 40% by automating the weekly pipeline in Airflow.",
+                    height=105,
+                    placeholder="Improved reporting turnaround by 40% by automating the weekly pipeline.",
                 )
-
-                if company or title or bullets.strip():
-                    edited_experience.append(
+                if company.strip() or title.strip() or bullets.strip():
+                    edited.append(
                         {
-                            "company": company,
-                            "title": title,
-                            "location": location,
-                            "start_date": start,
-                            "end_date": end,
+                            "company": company.strip(),
+                            "title": title.strip(),
+                            "location": location.strip(),
+                            "start_date": start.strip(),
+                            "end_date": end.strip(),
                             "bullets": [b.strip(" -•") for b in bullets.splitlines() if b.strip()],
                         }
                     )
+                if idx < current_count - 1:
+                    st.markdown('<div class="cvf-divider"></div>', unsafe_allow_html=True)
+            saved = st.form_submit_button("Save experience", type="primary", **FW)
 
-        candidate["experience"] = edited_experience
-        if st.button("＋ Add another experience", key=key("add_exp")):
-            st.session_state[count_key] = total + 1
-            st.rerun()
-        st.caption("Empty entries are discarded when you generate.")
+        c1, c2 = st.columns(2)
+        if saved:
+            candidate["experience"] = edited
+            st.session_state.draft_candidate = candidate
+            st.toast("Experience saved.", icon="✅")
+        with c2:
+            if st.button("＋ Add experience slot", key=key("add_exp"), **FW):
+                st.session_state[count_key] = current_count + 1
+                st.rerun(scope="fragment")
+        c1.caption(f"{current_count} editable experience slots")
 
-    # ----- Projects ------------------------------------------------------- #
-    with tabs[4]:
-        projects = list(candidate.get("projects") or [])
+    elif section == "Projects":
+        st.markdown("#### Selected projects")
         count_key = key("proj_count")
-        minimum = max(4, len(projects))
-        if count_key not in st.session_state:
-            st.session_state[count_key] = minimum
-        total = max(int(st.session_state[count_key]), minimum)
-        projects = projects + [{}] * (total - len(projects))
+        current_count = max(
+            int(st.session_state.get(count_key, max(4, len(candidate.get("projects") or [])))),
+            max(4, len(candidate.get("projects") or [])),
+        )
+        projects = list(candidate.get("projects") or [])
+        projects += [{}] * (current_count - len(projects))
 
-        edited_projects: List[Dict[str, Any]] = []
-        for idx in range(total):
-            project = projects[idx] or {}
-            links = project.get("links") or []
-            github_default = next(
-                (l.get("url", "") for l in links if l.get("label") == "GitHub"), ""
-            )
-            demo_default = next(
-                (l.get("url", "") for l in links if l.get("label") in {"Live Demo", "Project"}), ""
-            )
+        with st.form(key("projects_form"), clear_on_submit=False, border=False):
+            edited_projects: List[Dict[str, Any]] = []
+            for idx in range(current_count):
+                project = projects[idx] or {}
+                links = project.get("links") or []
+                github_default = next((l.get("url", "") for l in links if l.get("label") == "GitHub"), "")
+                demo_default = next((l.get("url", "") for l in links if l.get("label") in {"Live Demo", "Project"}), "")
 
-            with st.container(border=True):
                 st.markdown(f"**Project {idx + 1}**")
-                name = st.text_input(
-                    "Project name",
-                    value=project.get("name", ""),
-                    key=key(f"proj_name_{idx}"),
-                )
+                name = st.text_input("Project name", value=project.get("name", ""), key=key(f"proj_name_{idx}"))
                 technologies = st.text_input(
                     "Technologies",
                     value=", ".join(project.get("technologies", []) or []),
@@ -1024,26 +1089,16 @@ def _candidate_editor(candidate: Dict[str, Any], seq: int) -> Dict[str, Any]:
                     placeholder="Python, FastAPI, PostgreSQL",
                 )
                 c1, c2 = st.columns(2)
-                github = c1.text_input(
-                    "GitHub repository",
-                    value=github_default,
-                    key=key(f"proj_github_{idx}"),
-                    placeholder="https://github.com/…",
-                )
-                demo = c2.text_input(
-                    "Live demo / project link",
-                    value=demo_default,
-                    key=key(f"proj_demo_{idx}"),
-                    placeholder="https://…",
-                )
+                github = c1.text_input("GitHub repository", value=github_default, key=key(f"proj_github_{idx}"), placeholder="https://github.com/…")
+                demo = c2.text_input("Live demo / project link", value=demo_default, key=key(f"proj_demo_{idx}"), placeholder="https://…")
                 bullets = st.text_area(
                     "Contributions — one per line",
                     value="\n".join(project.get("bullets", []) or []),
                     key=key(f"proj_bullets_{idx}"),
-                    height=110,
+                    height=105,
+                    placeholder="Describe what you built, the methods used, and the measurable outcome when you have evidence.",
                 )
-
-                if name or bullets.strip() or github.strip() or demo.strip():
+                if name.strip() or bullets.strip() or github.strip() or demo.strip():
                     built_links: List[Dict[str, str]] = []
                     if github.strip():
                         built_links.append({"label": "GitHub", "url": normalise_url(github)})
@@ -1051,76 +1106,81 @@ def _candidate_editor(candidate: Dict[str, Any], seq: int) -> Dict[str, Any]:
                         built_links.append({"label": "Live Demo", "url": normalise_url(demo)})
                     edited_projects.append(
                         {
-                            "name": name,
+                            "name": name.strip(),
                             "technologies": [t.strip() for t in technologies.split(",") if t.strip()],
                             "bullets": [b.strip(" -•") for b in bullets.splitlines() if b.strip()],
                             "links": built_links,
                             "url": built_links[0]["url"] if built_links else "",
                         }
                     )
+                if idx < current_count - 1:
+                    st.markdown('<div class="cvf-divider"></div>', unsafe_allow_html=True)
+            saved = st.form_submit_button("Save projects", type="primary", **FW)
 
-        candidate["projects"] = edited_projects
-        if st.button("＋ Add another project", key=key("add_proj")):
-            st.session_state[count_key] = total + 1
-            st.rerun()
+        c1, c2 = st.columns(2)
+        if saved:
+            candidate["projects"] = edited_projects
+            st.session_state.draft_candidate = candidate
+            st.toast("Projects saved.", icon="✅")
+        with c2:
+            if st.button("＋ Add project slot", key=key("add_proj"), **FW):
+                st.session_state[count_key] = current_count + 1
+                st.rerun(scope="fragment")
+        c1.caption(f"{current_count} editable project slots")
 
-    # ----- Education ------------------------------------------------------ #
-    with tabs[5]:
-        educations = list(candidate.get("education") or [])
-        while len(educations) < 2:
-            educations.append({})
-
-        edited_education: List[Dict[str, Any]] = []
-        for idx in range(len(educations)):
-            edu = educations[idx] or {}
-            with st.container(border=True):
+    elif section == "Education":
+        with st.form(key("education_form"), clear_on_submit=False, border=False):
+            st.markdown("#### Education")
+            educations = list(candidate.get("education") or [])
+            while len(educations) < 2:
+                educations.append({})
+            edited_education: List[Dict[str, Any]] = []
+            for idx, edu in enumerate(educations):
                 st.markdown(f"**Education {idx + 1}**")
                 c1, c2 = st.columns(2)
-                institution = c1.text_input(
-                    "Institution",
-                    value=edu.get("institution", ""),
-                    key=key(f"edu_inst_{idx}"),
-                )
-                degree = c2.text_input(
-                    "Degree", value=edu.get("degree", ""), key=key(f"edu_degree_{idx}")
-                )
+                institution = c1.text_input("Institution", value=edu.get("institution", ""), key=key(f"edu_inst_{idx}"))
+                degree = c2.text_input("Degree", value=edu.get("degree", ""), key=key(f"edu_degree_{idx}"))
                 c1, c2, c3 = st.columns(3)
-                field = c1.text_input(
-                    "Field", value=edu.get("field", ""), key=key(f"edu_field_{idx}")
-                )
-                start = c2.text_input(
-                    "Start", value=edu.get("start_date", ""), key=key(f"edu_start_{idx}")
-                )
-                end = c3.text_input(
-                    "End", value=edu.get("end_date", ""), key=key(f"edu_end_{idx}")
-                )
-                if institution or degree or field:
+                field = c1.text_input("Field", value=edu.get("field", ""), key=key(f"edu_field_{idx}"))
+                start = c2.text_input("Start", value=edu.get("start_date", ""), key=key(f"edu_start_{idx}"))
+                end = c3.text_input("End", value=edu.get("end_date", ""), key=key(f"edu_end_{idx}"))
+                if institution.strip() or degree.strip() or field.strip():
                     edited_education.append(
                         {
-                            "institution": institution,
-                            "degree": degree,
-                            "field": field,
+                            "institution": institution.strip(),
+                            "degree": degree.strip(),
+                            "field": field.strip(),
                             "location": edu.get("location", ""),
-                            "start_date": start,
-                            "end_date": end,
+                            "start_date": start.strip(),
+                            "end_date": end.strip(),
                         }
                     )
-        candidate["education"] = edited_education
+            saved = st.form_submit_button("Save education", type="primary", **FW)
+        if saved:
+            candidate["education"] = edited_education
+            st.session_state.draft_candidate = candidate
+            st.toast("Education saved.", icon="✅")
 
-    # ----- Certifications ------------------------------------------------- #
-    with tabs[6]:
-        candidate["certifications"] = [
-            line.strip()
-            for line in st.text_area(
-                "One certification per line",
+    else:  # Certifications
+        with st.form(key("certifications_form"), clear_on_submit=False, border=False):
+            st.markdown("#### Certifications")
+            raw = st.text_area(
+                "Certifications — one per line",
                 value="\n".join(candidate.get("certifications", []) or []),
-                key=key("certs"),
-                height=120,
-                placeholder="AWS Certified Machine Learning – Specialty",
-            ).splitlines()            if line.strip()
-        ]
+                key=key("certifications"),
+                height=150,
+                placeholder="IBM Machine Learning\nIBM Data Science Professional Certificate",
+            )
+            saved = st.form_submit_button("Save certifications", type="primary", **FW)
+        if saved:
+            candidate["certifications"] = [line.strip() for line in raw.splitlines() if line.strip()]
+            st.session_state.draft_candidate = candidate
+            st.toast("Certifications saved.", icon="✅")
 
+    # Keep current inspected repositories attached to the candidate.
+    candidate = copy.deepcopy(st.session_state.draft_candidate)
     candidate["github_repositories"] = st.session_state.github_repos
+    st.session_state.draft_candidate = candidate
     return candidate
 
 
@@ -1131,21 +1191,23 @@ def _candidate_editor(candidate: Dict[str, Any], seq: int) -> Dict[str, Any]:
 def inspect_github_repositories(seq: int) -> None:
     st.markdown("##### Verified project evidence")
     st.caption(
-        "Paste public GitHub repository URLs — one per line. CVForge reads repository "
-        "metadata, README, languages and selected project files. Private repositories are never accessed."
+        "Paste public GitHub repositories. CVForge reads repository metadata, README, languages "
+        "and selected project files. Private repositories are never accessed."
     )
 
     existing = st.session_state.github_repos or []
-    raw = st.text_area(
-        "Public GitHub repositories",
-        value="\n".join(repo.get("url", "") for repo in existing),
-        key=f"c{seq}_github_input",
-        height=100,
-        label_visibility="collapsed",
-        placeholder="https://github.com/owner/project-one\nhttps://github.com/owner/project-two",
-    )
+    with st.form(f"github_inspect_form_{seq}", clear_on_submit=False, border=False):
+        raw = st.text_area(
+            "Public GitHub repositories",
+            value="\n".join(repo.get("url", "") for repo in existing),
+            key=f"c{seq}_github_input",
+            height=92,
+            label_visibility="collapsed",
+            placeholder="https://github.com/owner/project-one\nhttps://github.com/owner/project-two",
+        )
+        inspect = st.form_submit_button("Inspect repositories", type="secondary", **FW)
 
-    if st.button("Inspect repositories", key=f"c{seq}_github_inspect"):
+    if inspect:
         urls = [line.strip() for line in raw.splitlines() if line.strip()]
         if not urls:
             st.warning("Add at least one public repository URL.", icon="⚠️")
@@ -1155,17 +1217,23 @@ def inspect_github_repositories(seq: int) -> None:
             for index, url in enumerate(urls, start=1):
                 try:
                     inspected.append(
-                        post("/api/v1/github/inspect", st.session_state.token, json={"url": url})
+                        post(
+                            "/api/v1/github/inspect",
+                            st.session_state.token,
+                            json={"url": url},
+                        )
                     )
                 except APIError as exc:
                     if exc.is_auth_error:
                         show_error(exc)
+                        return
                     st.error(f"{url} — {exc}", icon="🚫")
                 progress.progress(index / len(urls), text=f"Inspected {index} of {len(urls)}")
             progress.empty()
             st.session_state.github_repos = inspected
             if inspected:
-                st.toast(f"Inspected {len(inspected)} repositories.", icon="✅")
+                st.toast(f"Verified {len(inspected)} public repositories.", icon="✅")
+            st.rerun(scope="fragment")
 
     for repo in st.session_state.github_repos or []:
         with st.container(border=True):
@@ -1176,7 +1244,6 @@ def inspect_github_repositories(seq: int) -> None:
             )
             if repo.get("description"):
                 st.write(repo["description"])
-
             meta = [
                 str(repo.get("language") or "").strip(),
                 ", ".join(repo.get("technologies", []) or []),
@@ -1185,10 +1252,8 @@ def inspect_github_repositories(seq: int) -> None:
             meta = [m for m in meta if m]
             if meta:
                 st.caption(" · ".join(meta))
-
             if repo.get("technologies"):
                 st.markdown(chips(repo["technologies"], tone="muted"), unsafe_allow_html=True)
-
             if repo.get("readme"):
                 with st.expander("Repository evidence"):
                     st.text(str(repo["readme"])[:4000])
@@ -1203,365 +1268,34 @@ def collect_link_evidence(candidate: Dict[str, Any], seq: int) -> Dict[str, str]
     projects = candidate.get("projects") or []
     answers: Dict[str, str] = {}
 
-    st.markdown("##### Links & project proof")
-    st.caption(
-        "Only provide links you actually own or can show as evidence. "
-        "CVForge preserves them and makes them clickable in PDF and DOCX exports."
-    )
-
-    with st.expander("Professional links", expanded=True):
-        c1, c2, c3 = st.columns(3)
-        linkedin = c1.text_input(
-            "LinkedIn URL",
-            value=contact.get("linkedin", ""),
-            placeholder="https://linkedin.com/in/your-profile",
-            key=f"c{seq}_link_linkedin",
-        )
-        portfolio = c2.text_input(
-            "Portfolio URL",
-            value=contact.get("portfolio", ""),
-            placeholder="https://yourportfolio.com",
-            key=f"c{seq}_link_portfolio",
-        )
-        github = c3.text_input(
-            "GitHub profile",
-            value=contact.get("github", ""),
-            placeholder="https://github.com/username",
-            key=f"c{seq}_link_github",
-        )
-
-        if linkedin.strip():
-            answers["linkedin_url"] = normalise_url(linkedin)
-        if portfolio.strip():
-            answers["portfolio_url"] = normalise_url(portfolio)
-        if github.strip():
-            answers["github_url"] = normalise_url(github)
-
-    with st.expander("Project links", expanded=False):
-        st.caption(
-            "Per project, provide a name and up to two links. "
-            "Typical pair: GitHub plus a live demo."
-        )
-
-        for idx, project in enumerate(projects):
-            name = st.text_input(
-                f"Project {idx + 1} name",
-                value=project.get("name", "") or f"Project {idx + 1}",
-                key=f"c{seq}_link_project_name_{idx}",
+    with st.form(f"evidence_answers_form_{seq}", clear_on_submit=False, border=False):
+        questions = analysis.get("questions") or []
+        if questions:
+            st.markdown("##### Evidence questions")
+            st.caption(
+                "Answer only what is true. These answers become additional evidence for Groq generation."
             )
-            links = project.get("links") or []
-            github_default = next(
-                (l.get("url", "") for l in links if l.get("label") == "GitHub"), ""
-            )
-            demo_default = next(
-                (l.get("url", "") for l in links if l.get("label") in {"Live Demo", "Project"}), ""
-            )
-
-            c1, c2 = st.columns(2)
-            github_url = c1.text_input(
-                "GitHub",
-                value=github_default,
-                placeholder="https://github.com/…",
-                key=f"c{seq}_link_project_github_{idx}",
-            )
-            demo_url = c2.text_input(
-                "Live Demo / Portfolio",
-                value=demo_default,
-                placeholder="https://…",
-                key=f"c{seq}_link_project_demo_{idx}",
-            )
-
-            if name.strip():
-                answers[f"project_name_{idx}"] = name.strip()
-            if github_url.strip():
-                answers[f"project_github_url_{idx}"] = normalise_url(github_url)
-            if demo_url.strip():
-                answers[f"project_demo_url_{idx}"] = normalise_url(demo_url)
-
-        st.markdown("**Additional projects**")
-        for idx in (1, 2):
-            name = st.text_input(
-                f"Additional project {idx} name",
-                key=f"c{seq}_link_extra_{idx}_name",
-                placeholder="Project name",
-            )
-            c1, c2 = st.columns(2)
-            github_url = c1.text_input(
-                "GitHub",
-                placeholder="https://github.com/…",
-                key=f"c{seq}_link_extra_{idx}_github",
-            )
-            demo_url = c2.text_input(
-                "Live Demo / Portfolio",
-                placeholder="https://…",
-                key=f"c{seq}_link_extra_{idx}_demo",
-            )
-            if name.strip():
-                answers[f"additional_project_{idx}_name"] = name.strip()
-            if github_url.strip():
-                answers[f"additional_project_{idx}_github_url"] = normalise_url(github_url)
-            if demo_url.strip():
-                answers[f"additional_project_{idx}_demo_url"] = normalise_url(demo_url)
-
-    st.session_state.link_answers = answers
-    return answers
-
-
-# --------------------------------------------------------------------------- #
-# CV Enhance
-# --------------------------------------------------------------------------- #
-
-@st.fragment
-def new_application() -> None:
-    # ------------------------------------------------------------------ #
-    # Workspace hero
-    # ------------------------------------------------------------------ #
-    st.markdown(
-        '<div class="cvf-workspace-hero">'
-        '<div class="cvf-hero-card">'
-        '<div class="cvf-hero-card__eyebrow">CV Enhance · Step 01</div>'
-        '<div class="cvf-hero-card__title">Build a CV that is tailored to the role — not a generic template.</div>'
-        '<div class="cvf-hero-card__body">'
-        'Start with the actual job description. CVForge extracts the role requirements, '
-        'combines them with your verified evidence, lets you review everything, then '
-        'generates the CV with Groq and independently scores it with Gemini.'
-        '</div>'
-        '<div class="cvf-model-row">'
-        '<span class="cvf-model cvf-model--groq">● Groq · Generate CV</span>'
-        '<span class="cvf-model cvf-model--gemini">● Gemini · ATS review</span>'
-        '<span class="cvf-model">◆ Evidence-first</span>'
-        '</div>'
-        '</div>'
-        '<div class="cvf-hero-card cvf-hero-card--soft">'
-        '<div class="cvf-mini-title">How this works</div>'
-        '<div class="cvf-mini-step"><div class="cvf-mini-step__n">1</div>'
-        '<div class="cvf-mini-step__body"><strong>Paste the JD</strong><br>We extract role, seniority, domain and required skills.</div></div>'
-        '<div class="cvf-mini-step"><div class="cvf-mini-step__n">2</div>'
-        '<div class="cvf-mini-step__body"><strong>Confirm evidence</strong><br>Edit your profile and verify public project evidence.</div></div>'
-        '<div class="cvf-mini-step"><div class="cvf-mini-step__n">3</div>'
-        '<div class="cvf-mini-step__body"><strong>Generate + evaluate</strong><br>Groq builds the CV; Gemini reviews the result.</div></div>'
-        '</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    if not st.session_state.analysis:
-        current_step = 1
-    elif not st.session_state.resume:
-        current_step = 2
-    else:
-        current_step = 3
-
-    stepper(["Target role", "Evidence & profile", "Generated CV"], current_step)
-
-    with st.container(border=False):
-        # -------------------------------------------------------------- #
-        # Target role intake
-        # -------------------------------------------------------------- #
-        st.markdown(
-            '<div class="cvf-form-shell">'
-            '<div class="cvf-form-head">'
-            '<div><div class="cvf-form-title">Tell us about the opportunity</div>'
-            '<div class="cvf-form-sub">Paste the complete posting for the strongest match.</div></div>'
-            '<div class="cvf-step-number">1</div>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-
-        if hasattr(st, "pills"):
-            mode = st.pills(
-                "CV workflow",
-                ["Enhance existing CV", "Build CV from scratch"],
-                default="Enhance existing CV",
-                key="cv_mode",
-                label_visibility="collapsed",
-            )
-        else:
-            mode = st.radio(
-                "CV workflow",
-                ["Enhance existing CV", "Build CV from scratch"],
-                horizontal=True,
-                key="cv_mode",
-                label_visibility="collapsed",
-            )
-
-        jd = st.text_area(
-            "Job description",
-            key="jd_input",
-            height=250,
-            placeholder=(
-                "Paste the complete job description…\n\n"
-                "Include responsibilities, required skills, qualifications, preferred skills and tools."
-            ),
-            help="A complete job posting gives Gemini and the generation engine more evidence to work with.",
-        )
-        jd_words = len((jd or "").split())
-        st.caption(f"{jd_words:,} words · {len(jd or ""):,} characters")
-
-        st.markdown(
-            '<div class="cvf-upload-card">'
-            '<div class="cvf-mini-title">Existing CV <span class="cvf-muted">(optional)</span></div>'
-            '<div class="cvf-muted">Upload a PDF, DOCX, TXT or Markdown file. Every extracted field remains editable.</div>',
-            unsafe_allow_html=True,
-        )
-        cv = st.file_uploader(
-            "Upload existing CV",
-            type=["pdf", "docx", "txt", "md"],
-            key="cv_upload",
-            label_visibility="collapsed",
-            help="Maximum upload size is controlled by the Streamlit deployment.",
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        if mode == "Build CV from scratch":
-            st.markdown(
-                '<div class="cvf-note" style="margin-top:.75rem">'
-                '<strong>Starting from zero?</strong> No CV upload is required. '
-                'After analysis, CVForge will open the complete evidence editor.'
-                '</div>',
-                unsafe_allow_html=True,
-            )
-
-        c1, c2 = st.columns([1, 1], gap="small")
-        with c1:
-            analyze = st.button(
-                "Analyze job description →",
-                type="primary",
-                disabled=not jd.strip(),
-                key="analyze_button",
-                **FW,
-            )
-        with c2:
-            reset = st.button(
-                "Clear workspace",
-                key="reset_button",
-                **FW,
-            )
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        if reset:
-            st.session_state.analysis = None
-            st.session_state.resume = None
-            st.session_state.application = None
-            st.session_state.github_repos = []
-            st.session_state.link_answers = {}
-            st.session_state.draft_candidate = None
-            st.session_state.draft_candidate_seq = None
-            st.session_state.form_seq = st.session_state.get("form_seq", 0) + 1
-            st.rerun()
-
-    if analyze:
-        result: Optional[Dict[str, Any]] = None
-        try:
-            with st.status("Analyzing the opportunity…", expanded=True) as status:
-                st.write("Reading the job description")
-                files = (
-                    {"cv": (cv.name, cv.getvalue(), cv.type or "application/octet-stream")}
-                    if cv is not None
-                    else None
+            for question in questions:
+                q_key = question.get("key")
+                if not q_key:
+                    continue
+                answers[q_key] = st.text_area(
+                    question.get("question", ""),
+                    help=question.get("reason", ""),
+                    key=f"c{seq}_q_{q_key}",
+                    height=90,
                 )
-                response = request(
-                    "POST",
-                    "/api/v1/jobs/analyze",
-                    token=st.session_state.token,
-                    data={"jd": jd},
-                    files=files,
-                )
-                result = response.json()
-                st.write("Extracting role and candidate signals")
-                status.update(label="Job analysis complete", state="complete")
-        except APIError as exc:
-            show_error(exc)
 
-        if result:
-            st.session_state.analysis = result
-            st.session_state.application = None
-            st.session_state.resume = None
-            st.session_state.github_repos = []
-            st.session_state.link_answers = {}
-            st.session_state.draft_candidate = None
-            st.session_state.draft_candidate_seq = None
-            st.session_state.form_seq = st.session_state.get("form_seq", 0) + 1
-            flash("success", "Job description analyzed.")
-            st.rerun()
+        answers.update(collect_link_evidence(candidate, seq))
+        evidence_saved = st.form_submit_button("Save evidence", type="primary", **FW)
 
-    analysis = st.session_state.analysis
-    if not analysis:
-        st.markdown('<div style="height:.5rem"></div>', unsafe_allow_html=True)
-        empty_state(
-            "No analysis yet",
-            "Paste a job description above and select “Analyze job description” to begin.",
-        )
-        return
+    if evidence_saved:
+        st.session_state.link_answers = answers
+        st.toast("Evidence saved.", icon="✅")
 
-    seq = int(st.session_state.get("form_seq", 0))
-    job = analysis.get("job") or {}
-
-    # ----- Step 2: job intelligence --------------------------------------- #
-    with st.container(border=True):
-        st.markdown("#### 2 · Job intelligence")
-        columns = st.columns(4)
-        columns[0].markdown(
-            stat_card("Role family", str(job.get("role_family", "general")).replace("_", " ").title()),
-            unsafe_allow_html=True,
-        )
-        columns[1].markdown(
-            stat_card("Seniority", str(job.get("seniority", "entry")).title()), unsafe_allow_html=True
-        )
-        columns[2].markdown(
-            stat_card("Domain", str(job.get("domain", "general")).title()), unsafe_allow_html=True
-        )
-        columns[3].markdown(
-            stat_card("Required skills", len(job.get("must_have_skills", []) or [])),
-            unsafe_allow_html=True,
-        )
-
-        must_have = job.get("must_have_skills") or []
-        if must_have:
-            st.markdown('<div style="height:.6rem"></div>', unsafe_allow_html=True)
-            st.markdown(chips(must_have), unsafe_allow_html=True)
-
-        nice_to_have = job.get("nice_to_have_skills") or []
-        if nice_to_have:
-            st.markdown(chips(nice_to_have, tone="muted"), unsafe_allow_html=True)
-
-    # ----- Step 3: candidate profile -------------------------------------- #
-    st.markdown('<hr class="cvf-divider"/>', unsafe_allow_html=True)
-    page_header(
-        "Your profile",
-        "Correct or complete the extracted information. Everything here becomes evidence for generation.",
-        eyebrow="Step 3",
-    )
-    candidate = _candidate_editor(analysis.get("candidate") or {}, seq)
-
-    # ----- Step 4: evidence ----------------------------------------------- #
-    st.markdown('<hr class="cvf-divider"/>', unsafe_allow_html=True)
-    page_header(
-        "Evidence",
-        "Strengthen the factual basis for your CV with verified public repositories and direct answers.",
-        eyebrow="Step 4",
-    )
-    inspect_github_repositories(seq)
-    candidate["github_repositories"] = st.session_state.github_repos
-
-    answers: Dict[str, str] = {}
-
-    questions = analysis.get("questions") or []
-    if questions:
-        st.markdown("##### Evidence questions")
-        st.caption("Answer only what is true. These answers become additional evidence for generation.")
-        for question in questions:
-            q_key = question.get("key")
-            if not q_key:
-                continue
-            answers[q_key] = st.text_area(
-                question.get("question", ""),
-                help=question.get("reason", ""),
-                key=f"c{seq}_q_{q_key}",
-            )
-
-    answers.update(collect_link_evidence(candidate, seq))
+    # Always reuse the last saved link answers during generation.
+    if st.session_state.get("link_answers"):
+        answers.update(st.session_state.link_answers)
 
     # ----- Step 5: generate ----------------------------------------------- #
     st.markdown('<hr class="cvf-divider"/>', unsafe_allow_html=True)
