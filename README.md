@@ -12,8 +12,10 @@ Streamlit Community Cloud
 FastAPI on Render
    |            |
    |            +--> Groq GPT-OSS 120B
+   |            |       (CV generation)
    |            |
    |            +--> Google Gemini 3.8 Flash
+   |                    (ATS evaluation)
    |
    v
 Neon PostgreSQL
@@ -30,9 +32,9 @@ Set `LLM_PROVIDER=groq` or `LLM_PROVIDER=gemini` in the backend environment.
 3. Inspect public GitHub repositories supplied by the candidate and use bounded repository evidence.
 4. Ask targeted evidence questions when requirements lack evidence.
 5. Select a versioned prompt template based on role, seniority, and domain.
-6. Generate a structured resume through the configured LLM provider.
-7. Validate ATS alignment deterministically.
-8. Store applications, prompt versions, generation jobs, and immutable resume revisions in PostgreSQL.
+6. Generate the tailored CV with Groq using only candidate evidence.
+7. Send the generated CV and the user's job description to Gemini for an independent ATS/job-match evaluation.
+8. Store the Gemini ATS report with the resume revision.
 9. Render PDF/DOCX on demand.
 
 ## Repository
@@ -57,26 +59,22 @@ CVForge/
 
 ## Backend environment
 
-Use one provider at a time:
-
-```env
 DATABASE_URL=postgresql://...
-LLM_PROVIDER=gemini
 
-# Google AI Studio / Gemini
-GEMINI_API_KEY=...
-GEMINI_MODEL=gemini-3.8-flash
-
-# Optional Groq provider
+# Groq builds the CV
 GROQ_API_KEY=...
 GROQ_MODEL=openai/gpt-oss-120b
 GROQ_BASE_URL=https://api.groq.com/openai/v1
+
+# Gemini evaluates ATS/job match
+GEMINI_API_KEY=...
+GEMINI_MODEL=gemini-3.8-flash
 
 JWT_SECRET=<strong-random-secret>
 CORS_ORIGINS=*
 ```
 
-Google's official GenAI Python SDK is used for Gemini structured JSON output. Groq continues to use the OpenAI-compatible Python client.
+Groq uses the OpenAI-compatible Python client for structured resume generation. Gemini uses the official Google GenAI Python SDK for structured ATS evaluation.
 
 ## Streamlit environment
 
@@ -96,15 +94,16 @@ Health check: `/health`
 
 The Dockerfile runs Alembic migrations before starting Uvicorn and uses Render's `$PORT`.
 
-For Gemini, add these Render environment variables:
+For the production workflow, add these Render environment variables:
 
 ```text
-LLM_PROVIDER=gemini
-GEMINI_API_KEY=<your-key>
+GROQ_API_KEY=<your-groq-key>
+GROQ_MODEL=openai/gpt-oss-120b
+GEMINI_API_KEY=<your-gemini-key>
 GEMINI_MODEL=gemini-3.8-flash
 ```
 
-Do not commit the key to GitHub.
+Do not commit either key to GitHub.
 
 ## Streamlit Community Cloud
 
@@ -125,10 +124,10 @@ CVFORGE_API_URL = "https://<your-render-backend>.onrender.com"
 - The ATS score is deterministic and independent of the LLM's self-evaluation.
 - GitHub repository inspection is limited to public repositories.
 
-## Gemini
+## LLM responsibilities
 
-CVForge uses the official Google GenAI Python SDK with Gemini structured output. The current default model is `gemini-3.8-flash`, and the resume response is constrained to the CVForge JSON schema before Pydantic validation.
+### Groq — CV generation
+Groq receives the parsed JD, candidate evidence, project evidence, and GitHub repository evidence. It generates the tailored CV in the strict CVForge resume schema.
 
-## Groq
-
-CVForge uses Groq's OpenAI-compatible API through the official Python OpenAI client with `https://api.groq.com/openai/v1` and the `openai/gpt-oss-120b` model.
+### Gemini — ATS evaluation
+After Groq generates the CV, Gemini receives the parsed job signals plus the generated CV and returns a structured 0–100 ATS/job-match report containing keyword coverage, required-skill coverage, title alignment, responsibility alignment, strengths, gaps, missing keywords, and recommendations.
