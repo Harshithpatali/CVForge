@@ -322,15 +322,42 @@ def _evaluate_ats_with_model(
     )
 
 
-def evaluate_ats(job: dict, resume: dict) -> dict:
+def evaluate_ats(
+    job: dict,
+    resume: dict,
+    candidate: dict | None = None,
+) -> dict:
     if not settings.gemini_api_key:
         raise RuntimeError("GEMINI_API_KEY is not configured.")
+
+    candidate_context = {}
+    if candidate:
+        candidate_context = {
+            "skills": candidate.get("skills", []),
+            "experience": [
+                {
+                    "company": item.get("company", ""),
+                    "title": item.get("title", ""),
+                }
+                for item in candidate.get("experience", [])[:6]
+            ],
+            "projects": [
+                {
+                    "name": item.get("name", ""),
+                    "technologies": item.get("technologies", []),
+                }
+                for item in candidate.get("projects", [])[:12]
+            ],
+            "education": candidate.get("education", [])[:4],
+        }
 
     prompt = (
         "JOB DESCRIPTION AND PARSED JOB SIGNALS:\n"
         f"{json.dumps(job, ensure_ascii=False)}\n\n"
         "GENERATED RESUME:\n"
         f"{json.dumps(resume, ensure_ascii=False)}\n\n"
+        "CANDIDATE EVIDENCE FOR PROJECT-GAP ANALYSIS:\n"
+        f"{json.dumps(candidate_context, ensure_ascii=False)}\n\n"
         "Evaluate the generated resume as an ATS/job-match artifact. "
         "The overall score must reflect how strongly this exact resume matches "
         "this exact job. Identify matched and missing keywords from the job data "
