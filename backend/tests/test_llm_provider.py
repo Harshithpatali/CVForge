@@ -2,8 +2,8 @@ from app.core.config import settings
 from app.services import llm
 
 
-def test_generate_resume_routes_to_groq(monkeypatch):
-    monkeypatch.setattr(settings, "llm_provider", "groq")
+def test_generate_resume_uses_groq(monkeypatch):
+    monkeypatch.setattr(settings, "groq_api_key", "test-key")
     monkeypatch.setattr(
         llm,
         "_generate_with_groq",
@@ -15,25 +15,58 @@ def test_generate_resume_routes_to_groq(monkeypatch):
     assert result["provider"] == "groq"
 
 
-def test_generate_resume_routes_to_gemini(monkeypatch):
-    monkeypatch.setattr(settings, "llm_provider", "gemini")
+def test_evaluate_ats_uses_gemini(monkeypatch):
+    monkeypatch.setattr(settings, "gemini_api_key", "test-key")
     monkeypatch.setattr(
-        llm,
-        "_generate_with_gemini",
-        lambda prompt: {"provider": "gemini", "prompt": prompt},
+        llm.genai,
+        "Client",
+        lambda api_key: object(),
     )
 
-    result = llm.generate_resume("test prompt")
+    class FakeClient:
+        pass
 
-    assert result["provider"] == "gemini"
+    fake_client = FakeClient()
+    fake_client.models = type(
+        "Models",
+        (),
+        {
+            "generate_content": lambda self, **kwargs: type(
+                "Response",
+                (),
+                {
+                    "text": (
+                        '{"score": 84, "keyword_coverage": 80, '
+                        '"required_skill_coverage": 90, "title_alignment": 85, '
+                        '"responsibility_alignment": 82, "formatting_score": 95, '
+                        '"matched_keywords": ["Python"], "missing_keywords": ["Spark"], '
+                        '"strengths": ["Strong Python alignment"], '
+                        '"gaps": ["Spark missing"], '
+                        '"recommendations": ["Add Spark only if evidenced"], '
+                        '"warnings": []}'
+                    )
+                },
+            )(),
+        },
+    )()
+
+    monkeypatch.setattr(llm.genai, "Client", lambda api_key: fake_client)
+
+    result = llm.evaluate_ats(
+        {"title": "Data Scientist", "must_have_skills": ["Python"]},
+        {"headline": "Data Scientist", "skills": ["Python"]},
+    )
+
+    assert result["score"] == 84
+    assert result["missing_keywords"] == ["Spark"]
 
 
-def test_generate_resume_rejects_unknown_provider(monkeypatch):
-    monkeypatch.setattr(settings, "llm_provider", "unknown")
+def test_gemini_ats_requires_api_key(monkeypatch):
+    monkeypatch.setattr(settings, "gemini_api_key", "")
 
     try:
-        llm.generate_resume("test prompt")
+        llm.evaluate_ats({}, {})
     except RuntimeError as exc:
-        assert "Unsupported LLM_PROVIDER" in str(exc)
+        assert "GEMINI_API_KEY" in str(exc)
     else:
-        raise AssertionError("Unknown provider should raise RuntimeError")
+        raise AssertionError("Missing Gemini key should raise RuntimeError")
