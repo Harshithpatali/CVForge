@@ -1405,10 +1405,11 @@ def new_application() -> None:
                 help="Uploaded CV content becomes editable candidate evidence.",
             )
 
+            # Form inputs are committed when the form is submitted.
+            # Keep the submit button enabled and validate the JD after submission.
             submit_analysis = st.form_submit_button(
                 "Analyze job description →",
                 type="primary",
-                disabled=not jd.strip(),
                 **FW,
             )
 
@@ -1440,45 +1441,52 @@ def new_application() -> None:
             st.rerun(scope="fragment")
 
         if submit_analysis:
-            try:
-                with st.status("Analyzing the opportunity…", expanded=True) as status:
-                    st.write("Reading the job description")
-                    files = (
-                        {
-                            "cv": (
-                                cv.name,
-                                cv.getvalue(),
-                                cv.type or "application/octet-stream",
-                            )
-                        }
-                        if cv is not None
-                        else None
-                    )
-                    response = request(
-                        "POST",
-                        "/api/v1/jobs/analyze",
-                        token=st.session_state.token,
-                        data={"jd": jd},
-                        files=files,
-                    )
-                    result = response.json()
-                    st.write("Extracting role and candidate signals")
-                    status.update(label="Job analysis complete", state="complete")
+            jd = (jd or "").strip()
+            if not jd:
+                st.warning(
+                    "Paste the job description before analyzing.",
+                    icon="📝",
+                )
+            else:
+                try:
+                        with st.status("Analyzing the opportunity…", expanded=True) as status:
+                        st.write("Reading the job description")
+                        files = (
+                            {
+                                "cv": (
+                                    cv.name,
+                                    cv.getvalue(),
+                                    cv.type or "application/octet-stream",
+                                )
+                            }
+                            if cv is not None
+                            else None
+                        )
+                        response = request(
+                            "POST",
+                            "/api/v1/jobs/analyze",
+                            token=st.session_state.token,
+                            data={"jd": jd},
+                            files=files,
+                        )
+                        result = response.json()
+                        st.write("Extracting role and candidate signals")
+                        status.update(label="Job analysis complete", state="complete")
 
-                st.session_state.analysis = result
-                st.session_state.application = None
-                st.session_state.resume = None
-                st.session_state.github_repos = []
-                st.session_state.link_answers = {}
-                st.session_state.draft_candidate = None
-                st.session_state.draft_candidate_seq = None
-                st.session_state.evidence_saved_seq = None
-                st.session_state.form_seq += 1
-                st.toast("Job description analyzed.", icon="✅")
-                st.rerun(scope="fragment")
-            except APIError as exc:
-                show_error(exc)
-                return
+                    st.session_state.analysis = result
+                    st.session_state.application = None
+                    st.session_state.resume = None
+                    st.session_state.github_repos = []
+                    st.session_state.link_answers = {}
+                    st.session_state.draft_candidate = None
+                    st.session_state.draft_candidate_seq = None
+                    st.session_state.evidence_saved_seq = None
+                    st.session_state.form_seq += 1
+                    st.toast("Job description analyzed.", icon="✅")
+                    st.rerun(scope="fragment")
+                except APIError as exc:
+                    show_error(exc)
+                    return
 
     analysis = st.session_state.analysis
     if not analysis:
