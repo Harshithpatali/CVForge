@@ -766,7 +766,11 @@ if not st.session_state.token:
 with st.sidebar:
     st.title('CVForge')
     st.caption(st.session_state.user.get('email',''))
-    page=st.radio('Workspace',['Overview','New Application','Applications','Profiles'],index=['Overview','New Application','Applications','Profiles'].index(st.session_state.get('page','Overview')))
+    pages=['Overview','CV Enhance','Applications','Profiles']
+    current_page=st.session_state.get('page','Overview')
+    if current_page not in pages:
+        current_page='Overview'
+    page=st.radio('Workspace',pages,index=pages.index(current_page))
     st.session_state.page=page
     if st.button('Sign out'): logout(); st.rerun()
 
