@@ -51,6 +51,7 @@ class CandidateProfile(BaseModel):
     certifications: list[str] = Field(default_factory=list)
     awards: list[str] = Field(default_factory=list)
     publications: list[str] = Field(default_factory=list)
+    github_repositories: list[dict] = Field(default_factory=list)
     raw_text: str = ""
     source_format: str = ""
 
