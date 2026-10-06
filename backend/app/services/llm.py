@@ -157,6 +157,10 @@ CV_SYSTEM_PROMPT = (
     "when there is no evidence. Never invent facts, metrics, credentials, or URLs."
 )
 
+class GeminiATSUnavailableError(RuntimeError):
+    """Raised when every configured Gemini ATS model is temporarily unavailable."""
+
+
 ATS_SYSTEM_PROMPT = (
     "You are CVForge's ATS evaluation engine. Evaluate the generated resume "
     "strictly against the provided job description. Score the resume from 0 to 100 "
@@ -316,7 +320,7 @@ def evaluate_ats(job: dict, resume: dict) -> dict:
         if index < len(models) - 1:
             time.sleep(0.5 + random.random() * 0.5)
 
-    raise RuntimeError(
+    raise GeminiATSUnavailableError(
         "Gemini ATS evaluation is temporarily unavailable across all configured "
         f"models. Tried: {', '.join(models)}. "
         + " | ".join(failures)[:1800]
