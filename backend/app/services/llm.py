@@ -134,6 +134,40 @@ ATS_JSON_SCHEMA = {
         "gaps": {"type": "array", "items": {"type": "string"}},
         "recommendations": {"type": "array", "items": {"type": "string"}},
         "warnings": {"type": "array", "items": {"type": "string"}},
+        "project_suggestions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "title": {"type": "string"},
+                    "priority": {
+                        "type": "string",
+                        "enum": ["High", "Medium", "Low"],
+                    },
+                    "why_missing": {"type": "string"},
+                    "skills_to_demonstrate": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "project_scope": {"type": "string"},
+                    "plan": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "resume_signal": {"type": "string"},
+                },
+                "required": [
+                    "title",
+                    "priority",
+                    "why_missing",
+                    "skills_to_demonstrate",
+                    "project_scope",
+                    "plan",
+                    "resume_signal",
+                ],
+            },
+        },
     },
     "required": [
         "score",
@@ -148,6 +182,7 @@ ATS_JSON_SCHEMA = {
         "gaps",
         "recommendations",
         "warnings",
+        "project_suggestions",
     ],
 }
 
@@ -167,8 +202,14 @@ ATS_SYSTEM_PROMPT = (
     "for likely ATS/job-match strength. Do not reward skills that are absent from "
     "the resume. Do not penalize the resume for refusing to invent unsupported facts. "
     "Consider exact and close keyword matches, required-skill coverage, title alignment, "
-    "responsibility alignment, and machine-readable formatting. Return only the "
-    "requested JSON schema."
+    "responsibility alignment, and machine-readable formatting. "
+    "When important job capabilities are missing or weak in the candidate evidence, "
+    "also propose up to 3 portfolio project ideas that could genuinely demonstrate them. "
+    "Do not propose projects that merely duplicate an existing project. "
+    "Each project suggestion must be clearly framed as a future project, never as completed experience. "
+    "Prefer realistic portfolio scope, identify the exact missing skill it would demonstrate, "
+    "give a concrete implementation plan, and state the resume signal the project could provide after completion. "
+    "Return only the requested JSON schema."
 )
 
 
@@ -296,7 +337,10 @@ def evaluate_ats(job: dict, resume: dict) -> dict:
         "Evaluate the generated resume as an ATS/job-match artifact. "
         "The overall score must reflect how strongly this exact resume matches "
         "this exact job. Identify matched and missing keywords from the job data "
-        "and explain the highest-impact gaps. Do not invent candidate experience."
+        "and explain the highest-impact gaps. "
+        "For project_suggestions, use only gaps that are actually relevant to the JD and "
+        "not already demonstrated by the candidate. Do not invent completed work, metrics, employers, "
+        "or credentials. These are actionable ideas for what the candidate could build next."
     )
 
     client = _gemini_client()
