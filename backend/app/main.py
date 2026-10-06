@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
+from app.core.db import get_db
 from app.core.config import settings
 from app.api.jobs import router as jobs_router
 from app.api.resumes import router as legacy_resumes_router
@@ -20,3 +22,14 @@ def root():
 @app.get('/health')
 def health():
     return {'status':'ok','service':'cvforge-api','storage_backend':settings.storage_backend}
+
+
+@app.get('/ready')
+def ready():
+    """Readiness probe that warms both the FastAPI process and a DB connection."""
+    db = next(get_db())
+    try:
+        db.execute(text("SELECT 1"))
+        return {'status': 'ready', 'service': 'cvforge-api'}
+    finally:
+        db.close()
