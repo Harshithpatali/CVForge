@@ -10,7 +10,7 @@ from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
-from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate
+from reportlab.platypus import HRFlowable, Paragraph, PageBreak, SimpleDocTemplate
 from pypdf import PdfReader
 
 URL_RE = re.compile(r"https?://[^\s|]+|www\.[^\s|]+", re.I)
@@ -190,7 +190,12 @@ def _layout_profile(page_target: int = 1, style: str = "reference") -> dict:
     }
 
 
-def _render_pdf_once(resume: dict, page_target: int, style: str) -> bytes:
+def _render_pdf_once(
+    resume: dict,
+    page_target: int,
+    style: str,
+    force_two_page_break: bool = False,
+) -> bytes:
     out = BytesIO()
     p = _layout_profile(page_target, style)
 
@@ -340,6 +345,8 @@ def _render_pdf_once(resume: dict, page_target: int, style: str) -> bytes:
                 story.append(Paragraph("- " + _pdf_rich_text(bullet), body))
 
     if resume.get("education"):
+        if page_target == 2 and force_two_page_break:
+            story.append(PageBreak())
         _section(story, "Education", section)
         for item in resume["education"]:
             degree = _normalise_text(item.get("degree", ""))
@@ -383,8 +390,30 @@ def render_pdf(
 
     best = None
     for attempt_style in attempts:
-        payload = _render_pdf_once(resume, page_target, attempt_style)
+        payload = _render_pdf_once(
+            resume,
+            page_target,
+            attempt_style,
+            force_two_page_break=False,
+        )
         pages = len(PdfReader(BytesIO(payload)).pages)
+
+        # If the user explicitly requested two pages and the document is short
+        # enough to fit on one, deliberately split before Education. This keeps
+        # the requested two-page format without adding a forced blank final page.
+        if page_target == 2 and pages == 1 and resume.get("education"):
+            forced = _render_pdf_once(
+                resume,
+                page_target,
+                attempt_style,
+                force_two_page_break=True,
+            )
+            forced_pages = len(PdfReader(BytesIO(forced)).pages)
+            if forced_pages <= 2:
+                return forced
+            payload = forced
+            pages = forced_pages
+
         best = payload
         if pages <= page_target:
             return payload
