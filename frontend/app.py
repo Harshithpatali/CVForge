@@ -1862,8 +1862,116 @@ def render_resume(result: Dict[str, Any]) -> None:
                 except APIError:
                     column.caption(f"{label} unavailable")
 
-    # ----- ATS evaluation ------------------------------------------------ #
+    # ----- AI optimization + ATS evaluation ---------------------------- #
     score = float(ats.get("score", 0) or 0)
+    current_gemini = float(ats.get("gemini_score", score) or 0)
+    semantic_score = ats.get("semantic_match_score")
+    deterministic_score = float(ats.get("deterministic_score", 0) or 0)
+
+    with st.container(border=True):
+        st.markdown("#### AI Resume Optimizer")
+        st.caption(
+            "CVForge can make a targeted second pass: Gemini identifies the highest-impact gaps, "
+            "Groq rewrites only supported evidence, and Gemini/semantic checks score the revised CV again."
+        )
+        opt1, opt2, opt3 = st.columns([1, 1, 1.4])
+        with opt1:
+            target_score = st.select_slider(
+                "Target score",
+                options=[75, 80, 85, 90, 95],
+                value=85,
+                key=f"ai_target_{resume_id}_{version}",
+            )
+        with opt2:
+            iterations = st.selectbox(
+                "Optimization passes",
+                [1, 2],
+                index=1,
+                key=f"ai_iterations_{resume_id}_{version}",
+            )
+        with opt3:
+            optimize = st.button(
+                "✦ Optimize CV with AI",
+                type="primary",
+                disabled=score >= target_score or not resume_id,
+                key=f"ai_optimize_{resume_id}_{version}",
+                **FW,
+            )
+
+        if score >= target_score:
+            st.success(
+                f"Current AI match score is {score:.1f}/100 — already at or above the selected target.",
+                icon="✅",
+            )
+
+        if optimize:
+            try:
+                with st.status("Running the AI optimization loop…", expanded=True) as status:
+                    status.write("Gemini is identifying high-impact gaps")
+                    status.write("Groq is applying evidence-preserving repairs")
+                    optimized = post(
+                        f"/api/v1/ai/resumes/{resume_id}/optimize",
+                        st.session_state.token,
+                        json={
+                            "target_score": target_score,
+                            "max_iterations": iterations,
+                        },
+                    )
+                    meta = optimized.get("optimization") or {}
+                    status.update(
+                        label=(
+                            f"Optimization complete · "
+                            f"{float((optimized.get('ats') or {}).get('score', 0) or 0):.1f}/100"
+                        ),
+                        state="complete",
+                    )
+
+                st.session_state.resume = {
+                    **result,
+                    "resume_id": optimized.get("resume_id", resume_id),
+                    "version": optimized.get("version", version),
+                    "resume": optimized.get("resume", resume),
+                    "ats": optimized.get("ats", ats),
+                }
+                st.toast(
+                    f"AI optimization {'improved' if meta.get('improved') else 'did not improve'} the measured score.",
+                    icon="✨" if meta.get("improved") else "ℹ️",
+                )
+                st.rerun(scope="fragment")
+            except APIError as exc:
+                show_error(exc)
+
+    with st.container(border=True):
+        st.markdown("#### AI evaluation stack")
+        st.caption(
+            "The displayed AI match score is a hybrid signal, not a single-model self-rating."
+        )
+        stack1, stack2, stack3 = st.columns(3)
+        stack1.markdown(
+            stat_card(
+                "Gemini judge",
+                f"{current_gemini:.1f}/100",
+                "LLM evaluation of JD ↔ generated CV fit.",
+            ),
+            unsafe_allow_html=True,
+        )
+        stack2.markdown(
+            stat_card(
+                "Semantic match",
+                "—" if semantic_score is None else f"{float(semantic_score):.1f}/100",
+                "Gemini embedding similarity across skills and responsibilities.",
+            ),
+            unsafe_allow_html=True,
+        )
+        stack3.markdown(
+            stat_card(
+                "Evidence checks",
+                f"{deterministic_score:.1f}/100",
+                "Deterministic keyword, section and link checks.",
+            ),
+            unsafe_allow_html=True,
+        )
+
     if score >= 85:
         verdict = ("Excellent match", "The CV is strongly aligned with this role.")
     elif score >= 75:
