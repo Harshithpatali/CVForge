@@ -7,6 +7,7 @@ from app.models.entities import (
     CandidateProfileRecord,
     GenerationEvent,
     ResumeArtifact,
+    GenerationJob,
 )
 from app.schemas.cv import CandidateProfile, JobProfile, ProjectLink
 from app.schemas.resume import GeneratedResume, ResumeLink
@@ -83,6 +84,16 @@ def optimize_resume(
         candidate = CandidateProfile.model_validate(profile.profile_json)
     else:
         candidate = CandidateProfile.model_validate(application.candidate_json or {})
+
+    latest_job = (
+        db.query(GenerationJob)
+        .filter_by(application_id=application.id)
+        .order_by(GenerationJob.id.desc())
+        .first()
+    )
+    if latest_job and isinstance(latest_job.input_json, dict):
+        saved_answers = latest_job.input_json.get("answers") or {}
+        _apply_link_evidence(candidate, saved_answers)
 
     _apply_github_repository_evidence(candidate)
 
