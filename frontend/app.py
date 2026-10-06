@@ -1981,7 +1981,7 @@ def render_resume(result: Dict[str, Any]) -> None:
                         if signal:
                             st.info(
                                 f"Resume signal after completion: {signal}",
-                                icon="✦",
+                                icon="💡",
                             )
 
     for warning in ats.get("warnings") or []:
