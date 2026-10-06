@@ -280,6 +280,18 @@ def generate_for_application(
     answers: dict[str, str] | None = None,
 ):
     answers = answers or {}
+    page_target = 2 if str(answers.get("_page_target", "1")) == "2" else 1
+    layout_style = str(answers.get("_layout_style", "reference")).strip().lower()
+    if layout_style not in {"reference", "compact"}:
+        layout_style = "reference"
+
+    # Layout controls are renderer options, not candidate evidence for Groq.
+    generation_answers = {
+        key: value
+        for key, value in answers.items()
+        if not str(key).startswith("_")
+    }
+
     generation_job: GenerationJob | None = None
 
     try:
@@ -346,7 +358,7 @@ def generate_for_application(
         prompt = build_generation_prompt(
             job.model_dump(),
             candidate_payload,
-            answers,
+            generation_answers,
             template,
         )
         prompt_version = _prompt_version(db, template, template.instructions)
@@ -366,6 +378,12 @@ def generate_for_application(
         ]
         resume.professional_links = [x for x in resume.professional_links if x.url]
 
+        resume_payload = resume.model_dump()
+        resume_payload["_render_options"] = {
+            "page_target": page_target,
+            "style": layout_style,
+        }
+
         # Step 2: Gemini independently evaluates the generated CV against the JD.
         ats = evaluate_ats(
             job.model_dump(),
@@ -384,7 +402,7 @@ def generate_for_application(
         artifact = ResumeArtifact(
             application_id=application.id,
             version=version,
-            resume_json=resume.model_dump(),
+            resume_json=resume_payload,
             ats_json=ats,
             prompt_version_id=prompt_version.id,
             prompt_key=template.key,
