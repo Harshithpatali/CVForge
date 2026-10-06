@@ -499,6 +499,16 @@ def show_error(exc: Exception) -> None:
         reset_session()
         flash("warning", "Your session expired. Please sign in again.")
         st.rerun()
+
+    if isinstance(exc, APIError) and exc.is_service_unavailable:
+        st.warning(
+            "The ATS evaluator is temporarily busy. CVForge tried the configured Gemini "
+            "fallback models, but they were all unavailable. Please retry shortly; your "
+            "candidate evidence is still preserved.",
+            icon="⏳",
+        )
+        return
+
     st.error(str(exc), icon="🚫")
 
 
