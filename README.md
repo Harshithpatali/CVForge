@@ -103,6 +103,28 @@ GEMINI_MODEL=gemini-3.8-flash
 
 Do not commit either key to GitHub.
 
+## Frontend deployment fingerprint
+
+The Streamlit frontend entrypoint is:
+```text
+streamlit_app/app.py
+```
+
+The current production UI build displays:
+```text
+studio-ui-2026.10.06
+```
+
+The sidebar should show:
+```text
+Dashboard
+CV Studio
+Applications
+Profiles
+```
+
+If Streamlit still shows `New Application`, it is serving an older deployment/commit or a different main-file path.
+
 ## Streamlit Community Cloud
 
 Repository: `Harshithpatali/CVForge`  
