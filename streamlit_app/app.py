@@ -602,7 +602,7 @@ def new_application():
             st.session_state.application = created
 
             with st.spinner(
-                "Inspecting evidence, tailoring the CV with Groq, and running ATS validation..."
+                "Inspecting evidence, building the CV with Groq, and evaluating ATS match with Gemini..."
             ):
                 result = post(
                     f"/api/v1/jobs/applications/{created['id']}/generate",
@@ -622,10 +622,10 @@ def render_resume(result):
     resume=result.get('resume',{}); ats=result.get('ats',{})
     st.divider(); st.header('Resume result')
     m1,m2,m3,m4=st.columns(4)
-    m1.metric('ATS score',f"{ats.get('score',0):.1f}")
+    m1.metric('Gemini ATS score',f"{ats.get('score',0):.1f}/100")
     m2.metric('Keyword coverage',f"{ats.get('keyword_coverage',0):.1f}%")
-    m3.metric('Section score',f"{ats.get('section_score',0):.1f}%")
-    m4.metric('Link coverage',f"{ats.get('link_coverage',100):.1f}%")
+    m3.metric('Required skills',f"{ats.get('required_skill_coverage',0):.1f}%")
+    m4.metric('Responsibility match',f"{ats.get('responsibility_alignment',0):.1f}%")
     st.subheader(resume.get('name','Resume'))
     if resume.get('contact_line'):
         st.markdown(_md_linkify(resume.get('contact_line','')))
@@ -679,7 +679,27 @@ def render_resume(result):
                 for b in x.get('bullets',[]): st.markdown(f'- {b}')
         elif key=='education':
             for x in values: st.markdown(f"**{x.get('degree','')} {x.get('field','')}** — {x.get('institution','')} {x.get('dates','')}")
-    if ats.get('warnings'): st.warning('\n'.join(ats['warnings']))
+    if ats.get('strengths'):
+        with st.expander('Why this CV matches the JD', expanded=True):
+            for item in ats.get('strengths', []):
+                st.markdown(f"- {item}")
+
+    if ats.get('gaps'):
+        with st.expander('ATS gaps to fix'):
+            for item in ats.get('gaps', []):
+                st.markdown(f"- {item}")
+
+    if ats.get('missing_keywords'):
+        with st.expander('Missing or weak keywords'):
+            st.write(", ".join(ats.get('missing_keywords', [])))
+
+    if ats.get('recommendations'):
+        with st.expander('Gemini recommendations'):
+            for item in ats.get('recommendations', []):
+                st.markdown(f"- {item}")
+
+    if ats.get('warnings'):
+        st.warning('\n'.join(ats['warnings']))
     st.subheader('Edit resume')
     edited=copy.deepcopy(resume)
 
@@ -793,7 +813,7 @@ def dashboard():
     except APIError as e: st.error(str(e)); return
     c1,c2,c3=st.columns(3)
     c1.metric('Applications',len(apps)); c2.metric('Saved profiles',len(profs)); c3.metric('Completed',sum(x.get('status')=='completed' for x in apps))
-    st.markdown('''<div class="cv-card"><h3>Evidence-first workflow</h3><p>CVForge separates job intelligence, candidate evidence, prompt selection, generation, and deterministic ATS validation. Grok rewrites evidence; it does not invent it.</p></div>''',unsafe_allow_html=True)
+    st.markdown('''<div class="cv-card"><h3>Evidence-first workflow</h3><p>CVForge separates job intelligence, candidate evidence, prompt selection, CV generation, and ATS evaluation. Groq builds the resume from evidence; Gemini independently evaluates the generated resume against the user's job description.</p></div>''',unsafe_allow_html=True)
 
 if not st.session_state.token:
     login_screen(); st.stop()
