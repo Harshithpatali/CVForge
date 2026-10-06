@@ -1327,6 +1327,8 @@ def collect_link_evidence(candidate: Dict[str, Any], seq: int) -> Dict[str, str]
         if demo_url.strip():
             answers[f"additional_project_{idx}_demo_url"] = normalise_url(demo_url)
 
+    return answers
+
 
 @st.fragment
 def new_application() -> None:
