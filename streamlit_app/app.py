@@ -9,7 +9,6 @@ import copy
 import html
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import streamlit as st
@@ -670,10 +669,11 @@ def _cached_workspace_get(
 
 
 def _parallel_workspace_load() -> Tuple[List[Any], List[Any]]:
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        apps_future = pool.submit(_cached_workspace_get, "applications", "/api/v1/applications")
-        profiles_future = pool.submit(_cached_workspace_get, "profiles", "/api/v1/profiles")
-        return apps_future.result(), profiles_future.result()
+    # The results are session-cached, so the dashboard only pays the API cost
+    # on first load or after an explicit refresh.
+    apps = _cached_workspace_get("applications", "/api/v1/applications")
+    profiles = _cached_workspace_get("profiles", "/api/v1/profiles")
+    return apps, profiles
 
 
 # --------------------------------------------------------------------------- #
