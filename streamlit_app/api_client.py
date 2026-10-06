@@ -19,8 +19,9 @@ from urllib3.util.retry import Retry
 # Configuration
 # --------------------------------------------------------------------------- #
 
-CONNECT_TIMEOUT = 15
-READ_TIMEOUT = 180
+CONNECT_TIMEOUT = 10
+FAST_TIMEOUT = 30
+GENERATION_TIMEOUT = 180
 USER_AGENT = "CVForge-UI/1.0"
 
 
@@ -156,7 +157,7 @@ def request(
     path: str,
     token: Optional[str] = None,
     *,
-    timeout: int = READ_TIMEOUT,
+    timeout: int = GENERATION_TIMEOUT,
     **kwargs: Any,
 ) -> requests.Response:
     """Perform an API request and return the raw ``requests.Response``."""
@@ -200,14 +201,18 @@ def request(
 
 def auth(path: str, payload: Mapping[str, Any]) -> Any:
     """Unauthenticated POST used for login and registration."""
-    return _decode(request("POST", path, json=dict(payload)))
+    return _decode(
+        request("POST", path, json=dict(payload), timeout=FAST_TIMEOUT)
+    )
 
 
 def get(path: str, token: Optional[str], **kwargs: Any) -> Any:
+    kwargs.setdefault("timeout", FAST_TIMEOUT)
     return _decode(request("GET", path, token=token, **kwargs))
 
 
 def post(path: str, token: Optional[str], **kwargs: Any) -> Any:
+    kwargs.setdefault("timeout", GENERATION_TIMEOUT)
     return _decode(request("POST", path, token=token, **kwargs))
 
 
