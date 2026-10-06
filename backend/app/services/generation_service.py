@@ -103,6 +103,37 @@ def _apply_link_evidence(candidate: CandidateProfile, answers: dict[str, str]) -
                 )
             )
 
+def _apply_github_repository_evidence(candidate: CandidateProfile) -> None:
+    existing = {_project_key(project.name): project for project in candidate.projects if project.name}
+
+    for repo in candidate.github_repositories:
+        name = str(repo.get("name") or repo.get("full_name") or "").strip()
+        if not name:
+            continue
+
+        technologies = [str(x) for x in repo.get("technologies", []) if str(x).strip()]
+        description = str(repo.get("description") or repo.get("evidence_summary") or "").strip()
+        repo_url = _normalise_url(str(repo.get("url") or ""))
+
+        project = existing.get(_project_key(name))
+        if project is None:
+            project = Project(name=name)
+            candidate.projects.append(project)
+            existing[_project_key(name)] = project
+
+        if description and not project.description:
+            project.description = description
+        for technology in technologies:
+            if technology not in project.technologies:
+                project.technologies.append(technology)
+
+        if repo_url:
+            project.links = [
+                ProjectLink(label="GitHub", url=repo_url),
+                *[link for link in project.links if link.url != repo_url],
+            ]
+
+
 def _contact_line_from_evidence(candidate: CandidateProfile, fallback: str) -> str:
     contact = candidate.contact
     parts: list[str] = []
@@ -291,6 +322,7 @@ def generate_for_application(
             )
 
         _apply_link_evidence(candidate, answers)
+        _apply_github_repository_evidence(candidate)
 
         template = select_template(job.role_family, job.seniority, job.domain)
         prompt = build_generation_prompt(
