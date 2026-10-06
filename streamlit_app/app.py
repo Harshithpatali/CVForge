@@ -8,6 +8,8 @@ from __future__ import annotations
 import copy
 import html
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import streamlit as st
@@ -19,7 +21,7 @@ from api_client import API_URL, APIError, auth, download, get, post, put, reques
 # --------------------------------------------------------------------------- #
 
 st.set_page_config(
-    page_title="CVForge — Evidence-first resume tailoring",
+    page_title="CVForge Studio — AI Resume Workspace",
     page_icon="📄",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -45,11 +47,13 @@ DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.docu
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$")
 URL_RE = re.compile(r"https?://[^\s|<>]+")
 
+UI_BUILD = "studio-ui-2026.10.06"
+
 NAV_ITEMS: Tuple[Tuple[str, str], ...] = (
-    ("Overview", "🏠"),
-    ("CV Enhance", "✨"),
-    ("Applications", "🗂️"),
-    ("Profiles", "👤"),
+    ("Dashboard", "⌂"),
+    ("CV Studio", "✦"),
+    ("Applications", "▦"),
+    ("Profiles", "◌"),
 )
 
 
@@ -446,6 +450,9 @@ _SESSION_DEFAULTS: Dict[str, Any] = {
     "page": "Overview",
     "form_seq": 0,
     "flash": None,
+    "api_cache": {},
+    "draft_candidate": None,
+    "draft_candidate_seq": None,
 }
 
 for _key, _value in _SESSION_DEFAULTS.items():
@@ -457,7 +464,10 @@ def reset_session() -> None:
         st.session_state[key] = None
     st.session_state.github_repos = []
     st.session_state.link_answers = {}
-    st.session_state.page = "Overview"
+    st.session_state.api_cache = {}
+    st.session_state.draft_candidate = None
+    st.session_state.draft_candidate_seq = None
+    st.session_state.page = "Dashboard"
 
 
 def flash(kind: str, message: str) -> None:
@@ -628,6 +638,42 @@ def empty_state(title: str, body: str) -> None:
 
 def section_label(text: str) -> None:
     st.markdown(f'<div class="cvf-section-title">{esc(text)}</div>', unsafe_allow_html=True)
+
+
+# --------------------------------------------------------------------------- #
+# Session-local API cache
+# --------------------------------------------------------------------------- #
+
+def _invalidate_api_cache(*keys: str) -> None:
+    cache = st.session_state.setdefault("api_cache", {})
+    if keys:
+        for key in keys:
+            cache.pop(key, None)
+    else:
+        cache.clear()
+
+
+def _cached_workspace_get(
+    key: str,
+    path: str,
+    *,
+    ttl: float = 30.0,
+) -> Any:
+    cache = st.session_state.setdefault("api_cache", {})
+    now = time.monotonic()
+    entry = cache.get(key)
+    if entry and now - float(entry.get("ts", 0)) < ttl:
+        return entry.get("data")
+    data = get(path, st.session_state.token) or []
+    cache[key] = {"ts": now, "data": data}
+    return data
+
+
+def _parallel_workspace_load() -> Tuple[List[Any], List[Any]]:
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        apps_future = pool.submit(_cached_workspace_get, "applications", "/api/v1/applications")
+        profiles_future = pool.submit(_cached_workspace_get, "profiles", "/api/v1/profiles")
+        return apps_future.result(), profiles_future.result()
 
 
 # --------------------------------------------------------------------------- #
@@ -1265,6 +1311,7 @@ def collect_link_evidence(candidate: Dict[str, Any], seq: int) -> Dict[str, str]
 # CV Enhance
 # --------------------------------------------------------------------------- #
 
+@st.fragment
 def new_application() -> None:
     # ------------------------------------------------------------------ #
     # Workspace hero
@@ -1399,6 +1446,8 @@ def new_application() -> None:
             st.session_state.application = None
             st.session_state.github_repos = []
             st.session_state.link_answers = {}
+            st.session_state.draft_candidate = None
+            st.session_state.draft_candidate_seq = None
             st.session_state.form_seq = st.session_state.get("form_seq", 0) + 1
             st.rerun()
 
@@ -1431,6 +1480,8 @@ def new_application() -> None:
             st.session_state.resume = None
             st.session_state.github_repos = []
             st.session_state.link_answers = {}
+            st.session_state.draft_candidate = None
+            st.session_state.draft_candidate_seq = None
             st.session_state.form_seq = st.session_state.get("form_seq", 0) + 1
             flash("success", "Job description analyzed.")
             st.rerun()
@@ -1550,6 +1601,7 @@ def new_application() -> None:
                 )
 
             st.session_state.resume = result
+            _invalidate_api_cache("applications")
             st.toast("CV generated successfully.", icon="✅")
         except APIError as exc:
             show_error(exc)
@@ -1880,6 +1932,7 @@ def render_resume(result: Dict[str, Any]) -> None:
 # Applications
 # --------------------------------------------------------------------------- #
 
+@st.fragment
 def applications() -> None:
     page_header(
         "Applications",
@@ -1889,7 +1942,7 @@ def applications() -> None:
 
     try:
         with st.spinner("Loading applications…"):
-            rows = get("/api/v1/applications", st.session_state.token) or []
+            rows = _cached_workspace_get("applications", "/api/v1/applications")
     except APIError as exc:
         show_error(exc)
         return
@@ -1901,7 +1954,7 @@ def applications() -> None:
         )
         st.markdown('<div style="height:.6rem"></div>', unsafe_allow_html=True)
         if st.button("✨ Start a new application", type="primary", key="apps_empty_start"):
-            st.session_state.page = "CV Enhance"
+            st.session_state.page = "CV Studio"
             st.rerun()
         return
 
@@ -1950,7 +2003,7 @@ def applications() -> None:
                                 "resume": latest.get("resume") or {},
                                 "ats": latest.get("ats") or {},
                             }
-                            st.session_state.page = "CV Enhance"
+                            st.session_state.page = "CV Studio"
                             st.rerun()
                         else:
                             st.info("No resume has been generated for this application yet.")
@@ -1962,6 +2015,7 @@ def applications() -> None:
 # Profiles
 # --------------------------------------------------------------------------- #
 
+@st.fragment
 def profiles() -> None:
     page_header(
         "Candidate profiles",
@@ -1971,7 +2025,7 @@ def profiles() -> None:
 
     try:
         with st.spinner("Loading profiles…"):
-            rows = get("/api/v1/profiles", st.session_state.token) or []
+            rows = _cached_workspace_get("profiles", "/api/v1/profiles")
     except APIError as exc:
         show_error(exc)
         return
@@ -2025,6 +2079,7 @@ def profiles() -> None:
 # Overview
 # --------------------------------------------------------------------------- #
 
+@st.fragment
 def dashboard() -> None:
     user = st.session_state.user or {}
     first_name = (user.get("name") or "").strip().split(" ")[0]
@@ -2032,14 +2087,13 @@ def dashboard() -> None:
 
     page_header(
         greeting,
-        "Track your applications, reuse evidence profiles, and keep every tailored CV defensible.",
-        eyebrow="Overview",
+        "A faster workspace for tailoring applications, reviewing ATS alignment, and reusing verified evidence.",
+        eyebrow="Dashboard",
     )
 
     try:
         with st.spinner("Loading workspace…"):
-            apps = get("/api/v1/applications", st.session_state.token) or []
-            profs = get("/api/v1/profiles", st.session_state.token) or []
+            apps, profs = _parallel_workspace_load()
     except APIError as exc:
         show_error(exc)
         return
@@ -2136,9 +2190,9 @@ def sidebar() -> None:
             unsafe_allow_html=True,
         )
 
-        current = st.session_state.get("page", "Overview")
+        current = st.session_state.get("page", "Dashboard")
         if current not in {label for label, _ in NAV_ITEMS}:
-            current = "Overview"
+            current = "Dashboard"
             st.session_state.page = current
 
         for label, icon in NAV_ITEMS:
@@ -2152,10 +2206,25 @@ def sidebar() -> None:
                 st.session_state.page = label
                 st.rerun()
 
+        st.markdown(
+            '<div style="margin:.8rem 0">'
+            '<div class="cvf-muted" style="font-size:.7rem;margin-bottom:.35rem">QUICK ACTION</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("✦  Create tailored CV", key="sidebar_create_cv", type="primary", **FW):
+            st.session_state.page = "CV Studio"
+            st.rerun()
+
         st.divider()
         st.markdown(
             f'<div class="cvf-muted" style="font-size:.72rem;word-break:break-all">'
             f"API · {esc(API_URL)}</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f'<div class="cvf-muted" style="font-size:.68rem;margin-top:.3rem">'
+            f'{esc(UI_BUILD)} · Groq build · Gemini review</div>',
             unsafe_allow_html=True,
         )
 
@@ -2175,16 +2244,16 @@ def main() -> None:
     sidebar()
 
     page = st.session_state.get("page", "Overview")
-    if page == "Overview":
+    if page == "Dashboard":
         dashboard()
-    elif page == "CV Enhance":
+    elif page == "CV Studio":
         new_application()
     elif page == "Applications":
         applications()
     elif page == "Profiles":
         profiles()
     else:
-        st.session_state.page = "Overview"
+        st.session_state.page = "Dashboard"
         dashboard()
 
 
