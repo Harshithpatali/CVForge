@@ -386,7 +386,12 @@ def parse_candidate(text: str, filename: str) -> CandidateProfile:
         lower = link.url.lower()
         if "linkedin" in lower or "portfolio" in lower:
             continue
-        if "github.com/" in lower or link.label == "Live Demo":
+        if "github.com/" in lower:
+            match = re.search(r"github\.com/([^/?#]+)/?([^/?#]*)", lower)
+            if match and match.group(2):
+                project_level_links.append(link)
+            continue
+        if link.label == "Live Demo":
             project_level_links.append(link)
         elif link.label == "Project":
             project_level_links.append(link)
