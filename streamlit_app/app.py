@@ -447,12 +447,13 @@ _SESSION_DEFAULTS: Dict[str, Any] = {
     "resume": None,
     "github_repos": [],
     "link_answers": {},
-    "page": "Overview",
+    "page": "Dashboard",
     "form_seq": 0,
     "flash": None,
     "api_cache": {},
     "draft_candidate": None,
     "draft_candidate_seq": None,
+    "evidence_saved_seq": None,
 }
 
 for _key, _value in _SESSION_DEFAULTS.items():
@@ -467,6 +468,7 @@ def reset_session() -> None:
     st.session_state.api_cache = {}
     st.session_state.draft_candidate = None
     st.session_state.draft_candidate_seq = None
+    st.session_state.evidence_saved_seq = None
     st.session_state.page = "Dashboard"
 
 
@@ -723,8 +725,8 @@ def login_screen() -> None:
             '<div class="cvf-eyebrow">Evidence-first resume tailoring</div>'
             '<div class="cvf-title" style="font-size:2.6rem">CVForge</div>'
             '<div class="cvf-sub">Tailor every application to the role without inventing a single '
-            "line. CVForge separates job intelligence, verified candidate evidence, generation and "
-            "deterministic ATS validation — so the CV you send is one you can defend in the interview."
+            "line. CVForge separates job intelligence, verified candidate evidence, Groq CV generation and "
+            "independent Gemini ATS evaluation — so the CV you send is one you can defend in the interview."
             "</div></div>",
             unsafe_allow_html=True,
         )
@@ -1264,79 +1266,374 @@ def inspect_github_repositories(seq: int) -> None:
 # --------------------------------------------------------------------------- #
 
 def collect_link_evidence(candidate: Dict[str, Any], seq: int) -> Dict[str, str]:
+    """Render optional professional and additional-project links inside a parent form."""
     contact = candidate.get("contact") or {}
-    projects = candidate.get("projects") or []
     answers: Dict[str, str] = {}
 
-    with st.form(f"evidence_answers_form_{seq}", clear_on_submit=False, border=False):
+    st.markdown("##### Professional links")
+    st.caption("Only provide links you own or can defend. CVForge preserves them in PDF and DOCX.")
+
+    c1, c2, c3 = st.columns(3)
+    linkedin = c1.text_input(
+        "LinkedIn",
+        value=contact.get("linkedin", ""),
+        placeholder="https://linkedin.com/in/your-profile",
+        key=f"c{seq}_evidence_linkedin",
+    )
+    portfolio = c2.text_input(
+        "Portfolio",
+        value=contact.get("portfolio", ""),
+        placeholder="https://yourportfolio.com",
+        key=f"c{seq}_evidence_portfolio",
+    )
+    github = c3.text_input(
+        "GitHub profile",
+        value=contact.get("github", ""),
+        placeholder="https://github.com/username",
+        key=f"c{seq}_evidence_github",
+    )
+
+    if linkedin.strip():
+        answers["linkedin_url"] = normalise_url(linkedin)
+    if portfolio.strip():
+        answers["portfolio_url"] = normalise_url(portfolio)
+    if github.strip():
+        answers["github_url"] = normalise_url(github)
+
+    st.markdown("##### Additional projects")
+    st.caption("Use this for projects not already listed in the profile editor.")
+    for idx in (1, 2):
+        name = st.text_input(
+            f"Additional project {idx}",
+            placeholder="Project name",
+            key=f"c{seq}_extra_project_{idx}_name",
+        )
+        c1, c2 = st.columns(2)
+        github_url = c1.text_input(
+            "GitHub",
+            placeholder="https://github.com/…",
+            key=f"c{seq}_extra_project_{idx}_github",
+        )
+        demo_url = c2.text_input(
+            "Live demo / portfolio",
+            placeholder="https://…",
+            key=f"c{seq}_extra_project_{idx}_demo",
+        )
+        if name.strip():
+            answers[f"additional_project_{idx}_name"] = name.strip()
+        if github_url.strip():
+            answers[f"additional_project_{idx}_github_url"] = normalise_url(github_url)
+        if demo_url.strip():
+            answers[f"additional_project_{idx}_demo_url"] = normalise_url(demo_url)
+
+
+@st.fragment
+def new_application() -> None:
+    """Primary CV Studio workspace. Expensive inputs are form-batched and API data is session-cached."""
+    analysis = st.session_state.analysis
+
+    st.markdown(
+        '<div class="cvf-workspace-hero">'
+        '<div class="cvf-hero-card">'
+        '<div class="cvf-hero-card__eyebrow">CV Studio · Evidence → CV → ATS</div>'
+        '<div class="cvf-hero-card__title">A modern CV workflow built around the job you are applying to.</div>'
+        '<div class="cvf-hero-card__body">'
+        'Paste the real job description, review the extracted evidence, verify your public projects, '
+        'then let Groq build the CV. Gemini independently reviews the finished CV against the same job.'
+        '</div>'
+        '<div class="cvf-model-row">'
+        '<span class="cvf-model cvf-model--groq">● Groq · Build CV</span>'
+        '<span class="cvf-model cvf-model--gemini">● Gemini · ATS review</span>'
+        '<span class="cvf-model">◆ Evidence-first</span>'
+        '</div>'
+        '</div>'
+        '<div class="cvf-hero-card cvf-hero-card--soft">'
+        '<div class="cvf-mini-title">Pipeline</div>'
+        '<div class="cvf-mini-step"><div class="cvf-mini-step__n">1</div>'
+        '<div class="cvf-mini-step__body"><strong>Analyze</strong><br>Extract role, seniority, domain and skills.</div></div>'
+        '<div class="cvf-mini-step"><div class="cvf-mini-step__n">2</div>'
+        '<div class="cvf-mini-step__body"><strong>Verify</strong><br>Edit your profile and confirm project evidence.</div></div>'
+        '<div class="cvf-mini-step"><div class="cvf-mini-step__n">3</div>'
+        '<div class="cvf-mini-step__body"><strong>Generate</strong><br>Groq creates the tailored CV.</div></div>'
+        '<div class="cvf-mini-step"><div class="cvf-mini-step__n">4</div>'
+        '<div class="cvf-mini-step__body"><strong>Evaluate</strong><br>Gemini scores the exact CV against the JD.</div></div>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    current_step = 3 if st.session_state.resume else (2 if analysis else 1)
+    stepper(["Target role", "Evidence & profile", "Generated CV"], current_step)
+
+    # -------------------------------------------------------------- #
+    # Step 1
+    # -------------------------------------------------------------- #
+    with st.container(border=True):
+        st.markdown("### 1 · Target role")
+        st.caption("Job inputs are batched in a form so typing does not trigger expensive Python reruns.")
+
+        with st.form(f"target_role_form_{st.session_state.form_seq}", clear_on_submit=False, border=False):
+            if hasattr(st, "pills"):
+                mode = st.pills(
+                    "CV workflow",
+                    ["Enhance existing CV", "Build CV from scratch"],
+                    default="Enhance existing CV",
+                    key=f"cv_mode_{st.session_state.form_seq}",
+                ) or "Enhance existing CV"
+            else:
+                mode = st.selectbox(
+                    "CV workflow",
+                    ["Enhance existing CV", "Build CV from scratch"],
+                    key=f"cv_mode_{st.session_state.form_seq}",
+                )
+
+            jd = st.text_area(
+                "Job description",
+                key=f"jd_input_{st.session_state.form_seq}",
+                height=230,
+                placeholder=(
+                    "Paste the complete job description…\n\n"
+                    "Include responsibilities, qualifications, required skills, preferred skills and tools."
+                ),
+                help="Use the full posting whenever possible.",
+            )
+
+            cv = st.file_uploader(
+                "Existing CV (optional)",
+                type=["pdf", "docx", "txt", "md"],
+                key=f"cv_upload_{st.session_state.form_seq}",
+                help="Uploaded CV content becomes editable candidate evidence.",
+            )
+
+            submit_analysis = st.form_submit_button(
+                "Analyze job description →",
+                type="primary",
+                disabled=not jd.strip(),
+                **FW,
+            )
+
+        if mode == "Build CV from scratch":
+            st.markdown(
+                '<div class="cvf-note"><strong>No CV upload required.</strong> '
+                'After analysis, CVForge opens a structured evidence editor.</div>',
+                unsafe_allow_html=True,
+            )
+
+        c1, c2 = st.columns([1, 1])
+        with c2:
+            reset_clicked = st.button(
+                "Clear workspace",
+                key=f"clear_workspace_{st.session_state.form_seq}",
+                **FW,
+            )
+
+        if reset_clicked:
+            st.session_state.analysis = None
+            st.session_state.application = None
+            st.session_state.resume = None
+            st.session_state.github_repos = []
+            st.session_state.link_answers = {}
+            st.session_state.draft_candidate = None
+            st.session_state.draft_candidate_seq = None
+            st.session_state.evidence_saved_seq = None
+            st.session_state.form_seq += 1
+            st.rerun(scope="fragment")
+
+        if submit_analysis:
+            try:
+                with st.status("Analyzing the opportunity…", expanded=True) as status:
+                    st.write("Reading the job description")
+                    files = (
+                        {
+                            "cv": (
+                                cv.name,
+                                cv.getvalue(),
+                                cv.type or "application/octet-stream",
+                            )
+                        }
+                        if cv is not None
+                        else None
+                    )
+                    response = request(
+                        "POST",
+                        "/api/v1/jobs/analyze",
+                        token=st.session_state.token,
+                        data={"jd": jd},
+                        files=files,
+                    )
+                    result = response.json()
+                    st.write("Extracting role and candidate signals")
+                    status.update(label="Job analysis complete", state="complete")
+
+                st.session_state.analysis = result
+                st.session_state.application = None
+                st.session_state.resume = None
+                st.session_state.github_repos = []
+                st.session_state.link_answers = {}
+                st.session_state.draft_candidate = None
+                st.session_state.draft_candidate_seq = None
+                st.session_state.evidence_saved_seq = None
+                st.session_state.form_seq += 1
+                st.toast("Job description analyzed.", icon="✅")
+                st.rerun(scope="fragment")
+            except APIError as exc:
+                show_error(exc)
+                return
+
+    analysis = st.session_state.analysis
+    if not analysis:
+        empty_state(
+            "Ready when you are",
+            "Paste the target job description above and analyze it to open the evidence workspace.",
+        )
+        return
+
+    seq = int(st.session_state.form_seq)
+    job = analysis.get("job") or {}
+
+    # -------------------------------------------------------------- #
+    # Step 2 — Job intelligence
+    # -------------------------------------------------------------- #
+    with st.container(border=True):
+        st.markdown("### 2 · Job intelligence")
+        metrics = st.columns(4)
+        metrics[0].markdown(
+            stat_card(
+                "Role family",
+                str(job.get("role_family", "general")).replace("_", " ").title(),
+            ),
+            unsafe_allow_html=True,
+        )
+        metrics[1].markdown(
+            stat_card("Seniority", str(job.get("seniority", "entry")).title()),
+            unsafe_allow_html=True,
+        )
+        metrics[2].markdown(
+            stat_card("Domain", str(job.get("domain", "general")).title()),
+            unsafe_allow_html=True,
+        )
+        metrics[3].markdown(
+            stat_card("Required skills", len(job.get("must_have_skills") or [])),
+            unsafe_allow_html=True,
+        )
+
+        required = job.get("must_have_skills") or []
+        preferred = job.get("preferred_skills") or []
+        if required:
+            st.markdown("**Must-have signals**")
+            st.markdown(chips(required, tone="info"), unsafe_allow_html=True)
+        if preferred:
+            st.markdown("**Preferred signals**")
+            st.markdown(chips(preferred, tone="muted"), unsafe_allow_html=True)
+
+    # -------------------------------------------------------------- #
+    # Step 3 — Candidate evidence
+    # -------------------------------------------------------------- #
+    st.markdown('<hr class="cvf-divider"/>', unsafe_allow_html=True)
+    page_header(
+        "Evidence workspace",
+        "Edit one evidence section at a time. Changes are committed through forms, so typing stays responsive.",
+        eyebrow="Step 3",
+    )
+    candidate = _candidate_editor(analysis.get("candidate") or {}, seq)
+
+    # -------------------------------------------------------------- #
+    # Step 4 — Verified project evidence
+    # -------------------------------------------------------------- #
+    st.markdown('<hr class="cvf-divider"/>', unsafe_allow_html=True)
+    page_header(
+        "Verified project evidence",
+        "Public GitHub repositories strengthen project claims without becoming proof of employment.",
+        eyebrow="Step 4",
+    )
+    inspect_github_repositories(seq)
+    candidate["github_repositories"] = st.session_state.github_repos
+
+    # Additional evidence + links.
+    with st.form(f"evidence_form_{seq}", clear_on_submit=False, border=False):
         questions = analysis.get("questions") or []
         if questions:
-            st.markdown("##### Evidence questions")
-            st.caption(
-                "Answer only what is true. These answers become additional evidence for Groq generation."
-            )
+            st.markdown("#### Evidence questions")
+            st.caption("Answer only what is true. These answers are sent to Groq as additional evidence.")
             for question in questions:
                 q_key = question.get("key")
                 if not q_key:
                     continue
-                answers[q_key] = st.text_area(
+                st.text_area(
                     question.get("question", ""),
                     help=question.get("reason", ""),
                     key=f"c{seq}_q_{q_key}",
-                    height=90,
+                    height=88,
                 )
 
-        answers.update(collect_link_evidence(candidate, seq))
-        evidence_saved = st.form_submit_button("Save evidence", type="primary", **FW)
+        answers_local = {}
+        for question in questions:
+            q_key = question.get("key")
+            if q_key:
+                answers_local[q_key] = st.session_state.get(f"c{seq}_q_{q_key}", "")
+
+        answers_local.update(collect_link_evidence(candidate, seq))
+
+        evidence_saved = st.form_submit_button("Save evidence & links", type="primary", **FW)
 
     if evidence_saved:
-        st.session_state.link_answers = answers
+        st.session_state.link_answers = answers_local
+        st.session_state.evidence_saved_seq = seq
         st.toast("Evidence saved.", icon="✅")
 
-    # Always reuse the last saved link answers during generation.
-    if st.session_state.get("link_answers"):
-        answers.update(st.session_state.link_answers)
+    answers = dict(st.session_state.get("link_answers") or {})
 
-    # ----- Step 5: generate ----------------------------------------------- #
+    # -------------------------------------------------------------- #
+    # Step 5 — Generation
+    # -------------------------------------------------------------- #
     st.markdown('<hr class="cvf-divider"/>', unsafe_allow_html=True)
     with st.container(border=True):
         c1, c2 = st.columns([2, 1])
         with c1:
-            st.markdown("#### 5 · Generate tailored CV")
+            st.markdown("### 5 · Generate")
             st.caption(
-                "Groq builds the tailored CV from your evidence. Gemini then independently evaluates "
-                "the finished CV against the job description and explains the match."
+                "Groq builds the tailored CV. Gemini then independently evaluates the finished CV against this exact job."
             )
+            if st.session_state.get("evidence_saved_seq") != seq:
+                st.markdown(
+                    '<div class="cvf-note"><strong>Before generating:</strong> save the evidence section once so the exact links and answers are committed.</div>',
+                    unsafe_allow_html=True,
+                )
         with c2:
             generate = st.button(
-                "Generate tailored CV",
+                "Generate CV with Groq →",
                 type="primary",
-                key="generate_button",
+                disabled=st.session_state.get("evidence_saved_seq") != seq,
+                key=f"generate_button_{seq}",
                 **FW,
             )
 
     if generate:
         try:
-            with st.spinner("Saving your application…"):
+            with st.status("Building and evaluating your CV…", expanded=True) as status:
+                status.write("Creating the application")
                 created = post(
                     "/api/v1/jobs/applications",
                     st.session_state.token,
                     json={"job": job, "candidate": candidate},
                 )
-            st.session_state.application = created
+                st.session_state.application = created
 
-            with st.spinner(
-                "Building your CV with Groq, then running an independent Gemini ATS review…"
-            ):
+                status.write("Groq is generating the tailored CV")
                 result = post(
                     f"/api/v1/jobs/applications/{created['id']}/generate",
                     st.session_state.token,
                     json=answers,
                 )
 
+                status.update(
+                    label=f"CV ready · Gemini ATS score {float((result.get('ats') or {}).get('score', 0) or 0):.1f}/100",
+                    state="complete",
+                )
+
             st.session_state.resume = result
             _invalidate_api_cache("applications")
-            st.toast("CV generated successfully.", icon="✅")
+            st.toast("Tailored CV generated and independently reviewed.", icon="✅")
         except APIError as exc:
             show_error(exc)
 
@@ -1785,8 +2082,8 @@ def profiles() -> None:
             "Analyze a job description first — the extracted candidate evidence can then be saved here.",
             icon="ℹ️",
         )
-        if st.button("✨ Go to CV Enhance", type="primary", key="profiles_goto"):
-            st.session_state.page = "CV Enhance"
+        if st.button("✨ Go to CV Studio", type="primary", key="profiles_goto"):
+            st.session_state.page = "CV Studio"
             st.rerun()
         return
 
@@ -1847,7 +2144,7 @@ def dashboard() -> None:
     st.markdown("#### Quick actions")
     q1, q2, q3 = st.columns(3)
     if q1.button("✨ Tailor a new CV", type="primary", key="qa_new", **FW):
-        st.session_state.page = "CV Enhance"
+        st.session_state.page = "CV Studio"
         st.rerun()
     if q2.button("🗂️ Review applications", key="qa_apps", **FW):
         st.session_state.page = "Applications"
@@ -1884,8 +2181,7 @@ def dashboard() -> None:
             '<div class="cvf-stat__label">Evidence-first workflow</div>'
             '<div style="font-size:.9rem;line-height:1.6;color:var(--cvf-muted)">'
             "CVForge separates <strong>job intelligence</strong>, <strong>candidate evidence</strong>, "
-            "<strong>prompt selection</strong>, <strong>generation</strong> and "
-            "<strong>deterministic ATS validation</strong>.<br><br>"
+            "<strong>Groq CV generation</strong> and <strong>Gemini ATS evaluation</strong>.<br><br>"
             "The model rewrites evidence — it does not invent it. Every claim in your CV traces back "
             "to something you supplied."
             "</div></div>",
@@ -1977,7 +2273,7 @@ def main() -> None:
 
     sidebar()
 
-    page = st.session_state.get("page", "Overview")
+    page = st.session_state.get("page", "Dashboard")
     if page == "Dashboard":
         dashboard()
     elif page == "CV Studio":
