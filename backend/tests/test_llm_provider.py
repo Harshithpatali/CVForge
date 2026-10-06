@@ -43,7 +43,12 @@ def test_evaluate_ats_uses_gemini(monkeypatch):
                         '"strengths": ["Strong Python alignment"], '
                         '"gaps": ["Spark missing"], '
                         '"recommendations": ["Add Spark only if evidenced"], '
-                        '"warnings": []}'
+                        '"warnings": [], "project_suggestions": [{"title": "Streaming Analytics Control Tower", '
+                        '"priority": "High", "why_missing": "The JD requires streaming systems.", '
+                        '"skills_to_demonstrate": ["Kafka", "Spark Streaming"], '
+                        '"project_scope": "Build a small event-driven analytics platform.", '
+                        '"plan": ["Ingest events", "Process streams", "Expose a dashboard"], '
+                        '"resume_signal": "Demonstrates event-driven data engineering."}]}'
                     )
                 },
             )(),
