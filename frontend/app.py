@@ -1449,7 +1449,7 @@ def new_application() -> None:
                 )
             else:
                 try:
-                        with st.status("Analyzing the opportunity…", expanded=True) as status:
+                    with st.status("Analyzing the opportunity…", expanded=True) as status:
                         st.write("Reading the job description")
                         files = (
                             {
@@ -1471,7 +1471,10 @@ def new_application() -> None:
                         )
                         result = response.json()
                         st.write("Extracting role and candidate signals")
-                        status.update(label="Job analysis complete", state="complete")
+                        status.update(
+                            label="Job analysis complete",
+                            state="complete",
+                        )
 
                     st.session_state.analysis = result
                     st.session_state.application = None
