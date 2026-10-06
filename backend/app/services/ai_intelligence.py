@@ -5,6 +5,7 @@ from google.genai import types
 
 from app.core.config import settings
 from app.schemas.cv import CandidateProfile, Contact, Education, Experience, JobProfile, Project, ProjectLink
+from app.services.jd_parser import normalize_job_title
 
 
 JOB_SCHEMA = {
@@ -221,7 +222,11 @@ JOB DESCRIPTION:
         )
         data = _json(getattr(response, "text", "") or "")
         data["raw_text"] = jd_text
-        return JobProfile.model_validate(data)
+        job = JobProfile.model_validate(data)
+        job.title = normalize_job_title(job.title, jd_text)
+        if job.company:
+            job.company = " ".join(job.company.strip().split())[:255]
+        return job
     except Exception:
         return fallback
 
