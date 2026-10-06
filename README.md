@@ -177,6 +177,18 @@ studio-ui-2026.10.06
 ```
 
 
+## Resume layout controls
+
+CVForge keeps the reference one-column resume format shown in the product design while allowing the applicant to choose the document density and target length:
+
+- **1 page / Reference format** — the default for a concise ATS-friendly CV.
+- **2 pages / Reference format** — more breathing room while preserving the same visual system.
+- **Compact ATS** — tighter typography and spacing for dense evidence.
+
+The user chooses the target during generation. After generation, the same controls remain available before downloading PDF or DOCX, so changing the document layout does **not** call Groq or Gemini again. Layout changes are deterministic renderer changes only.
+
+The renderer automatically checks PDF page count and applies a compact safety pass for dense one-page requests.
+
 ## Security
 
 - Never commit API keys or database passwords.
